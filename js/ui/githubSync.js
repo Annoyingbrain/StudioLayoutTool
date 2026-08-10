@@ -115,13 +115,45 @@ window.App = window.App || {};
     }
   }
 
+  async function listDirectory(cfg, path) {
+    const res = await fetch(`${contentsUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch)}`, { headers: authHeaders(cfg) });
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error(`Listing ${path} failed (${res.status}): ${await res.text()}`);
+    return res.json();
+  }
+
+  // Reads the index manifest, then reconciles it against what's actually in
+  // the repo's setups/ folder -- picks up files saved before this Load
+  // feature existed (or added outside the app) and repairs the index so
+  // they show up going forward without a re-scan every time.
   async function refreshLoadList(cfg) {
     cfg = cfg || readFields();
     const picker = dom.qs('#gh-load-picker');
     if (!configReady(cfg)) return;
     try {
-      const { data } = await fetchJsonFile(cfg, INDEX_PATH);
-      const entries = Array.isArray(data) ? data : [];
+      const indexFile = await fetchJsonFile(cfg, INDEX_PATH);
+      const entries = Array.isArray(indexFile.data) ? indexFile.data.slice() : [];
+      const knownIds = new Set(entries.map(e => e.id));
+
+      const files = await listDirectory(cfg, 'setups');
+      const orphanFiles = Array.isArray(files)
+        ? files.filter(f => f.type === 'file' && f.name.endsWith('.json') && f.name !== 'index.json' && !knownIds.has(f.name.replace(/\.json$/, '')))
+        : [];
+
+      for (const f of orphanFiles) {
+        try {
+          const { data } = await fetchJsonFile(cfg, f.path);
+          if (data && data.id) {
+            entries.push({ id: data.id, name: data.name, updatedAt: data.updatedAt, sceneCount: (data.scenes || []).length });
+          }
+        } catch (e) { /* unreadable/corrupt file -- skip it */ }
+      }
+
+      if (orphanFiles.length) {
+        await putJsonFile(cfg, INDEX_PATH, entries, indexFile.sha, `Repair setups index (recovered ${orphanFiles.length} untracked setup(s))`);
+        setStatus(`Found and indexed ${orphanFiles.length} previously-saved setup(s).`);
+      }
+
       entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
       dom.clear(picker);
       picker.appendChild(dom.el('option', { value: '', text: entries.length ? 'Load setup from GitHub…' : 'No saved setups yet' }));
