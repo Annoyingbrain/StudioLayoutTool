@@ -63,6 +63,7 @@ window.App = window.App || {};
     if (!confirm('Start a new setup? Unsaved changes to the current one will be lost unless you saved/exported it.')) return;
     const defaults = App.persistence.loadDefaultReferencePoints();
     App.Store.setSetup(App.factories.newSetup('Untitled Setup', defaults || undefined));
+    App.canvas.fitToReferencePoints();
   }
 
   function saveLocal() {
@@ -115,7 +116,7 @@ window.App = window.App || {};
         App.Store.renameScene(App.Store.getActiveSceneId(), e.target.value);
       });
       dom.qs('#btn-new-scene').addEventListener('click', () => {
-        const scene = App.Store.addScene(`Scene ${App.Store.getScenes().length + 1}`);
+        const scene = App.Store.addScene(`Position ${App.Store.getScenes().length + 1}`);
         App.canvas.fitToReferencePoints();
         App.toast(`Added "${scene.name}".`);
       });
@@ -156,7 +157,7 @@ window.App = window.App || {};
       dom.qs('#chk-studio-sketch').addEventListener('change', () => App.canvas.render());
       dom.qs('#view-scale').addEventListener('input', e => {
         const v = parseFloat(e.target.value);
-        if (v > 0) App.Store.setView({ scale: v });
+        if (v > 0) App.Store.setView({ scale: Math.max(v, App.canvas.getMinScale()) });
       });
 
       dom.qs('#import-framegrab').addEventListener('change', async e => {

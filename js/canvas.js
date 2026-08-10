@@ -10,11 +10,24 @@ window.App = window.App || {};
   let canvas, ctx, wrap;
   let dragState = null;
   let spaceDown = false;
+  // The scale computed by the last "fit to reference points" pass -- acts as
+  // a floor so you can zoom in for detail work but can't zoom out past the
+  // view that fills the space between the panels.
+  let minScale = 4;
   // Active touch/pen contacts by pointerId, for pinch-to-zoom (two-finger)
   // gesture detection alongside the existing single-pointer drag logic.
   const activePointers = new Map();
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // worldToScreen at scale=1, origin=(0,0) -- i.e. just the fixed display
+  // rotation applied to (x,y), with no scale/origin baked in yet. Used to
+  // derive origins for zoom-to-cursor and fit-to-bounds without assuming the
+  // transform is a pure axis flip (it also carries a small rotation
+  // correction -- see js/utils/geometry.js).
+  function projectUnit(x, y) {
+    return geo.worldToScreen({ scale: 1, originX: 0, originY: 0 }, x, y);
+  }
 
   function resizeCanvasToDisplaySize() {
     const dpr = window.devicePixelRatio || 1;
@@ -36,10 +49,8 @@ window.App = window.App || {};
     return { screen: { x: sx, y: sy }, world: geo.screenToWorld(getView(), sx, sy) };
   }
 
-  function drawGrid(view, w, h) {
+  function drawGrid(view, w, h, centerPoint) {
     ctx.save();
-    ctx.strokeStyle = '#2b2f38';
-    ctx.lineWidth = 1;
     const topLeft = geo.screenToWorld(view, 0, 0);
     const bottomRight = geo.screenToWorld(view, w, h);
     const minX = Math.floor(Math.min(topLeft.x, bottomRight.x)) - 1;
@@ -47,28 +58,29 @@ window.App = window.App || {};
     const minY = Math.floor(Math.min(topLeft.y, bottomRight.y)) - 1;
     const maxY = Math.ceil(Math.max(topLeft.y, bottomRight.y)) + 1;
 
-    for (let x = minX; x <= maxX; x++) {
-      const major = x % 5 === 0;
-      ctx.strokeStyle = major ? '#3a4150' : '#262b34';
-      ctx.lineWidth = major ? 1.2 : 0.6;
+    // Grid lines are spaced every 1m/5m from the studio's Center reference
+    // point (not from world 0,0 -- that's just wherever the source mesh
+    // export happened to put its origin, not a physically meaningful point),
+    // so the grid actually passes through Center instead of an unrelated
+    // cross-hair floating independently on top of it.
+    const cx = centerPoint ? centerPoint.x : 0, cy = centerPoint ? centerPoint.y : 0;
+    const firstN_X = Math.ceil(minX - cx), lastN_X = Math.floor(maxX - cx);
+    const firstN_Y = Math.ceil(minY - cy), lastN_Y = Math.floor(maxY - cy);
+
+    for (let n = firstN_X; n <= lastN_X; n++) {
+      const x = cx + n;
+      ctx.strokeStyle = n === 0 ? '#54607a' : (n % 5 === 0 ? '#3a4150' : '#262b34');
+      ctx.lineWidth = n === 0 ? 1.5 : (n % 5 === 0 ? 1.2 : 0.6);
       const a = geo.worldToScreen(view, x, minY), b = geo.worldToScreen(view, x, maxY);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
-    for (let y = minY; y <= maxY; y++) {
-      const major = y % 5 === 0;
-      ctx.strokeStyle = major ? '#3a4150' : '#262b34';
-      ctx.lineWidth = major ? 1.2 : 0.6;
+    for (let n = firstN_Y; n <= lastN_Y; n++) {
+      const y = cy + n;
+      ctx.strokeStyle = n === 0 ? '#54607a' : (n % 5 === 0 ? '#3a4150' : '#262b34');
+      ctx.lineWidth = n === 0 ? 1.5 : (n % 5 === 0 ? 1.2 : 0.6);
       const a = geo.worldToScreen(view, minX, y), b = geo.worldToScreen(view, maxX, y);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
-
-    // World origin axes
-    ctx.strokeStyle = '#54607a';
-    ctx.lineWidth = 1.5;
-    const ox = geo.worldToScreen(view, minX, 0), ox2 = geo.worldToScreen(view, maxX, 0);
-    ctx.beginPath(); ctx.moveTo(ox.x, ox.y); ctx.lineTo(ox2.x, ox2.y); ctx.stroke();
-    const oy = geo.worldToScreen(view, 0, minY), oy2 = geo.worldToScreen(view, 0, maxY);
-    ctx.beginPath(); ctx.moveTo(oy.x, oy.y); ctx.lineTo(oy2.x, oy2.y); ctx.stroke();
     ctx.restore();
   }
 
@@ -186,7 +198,10 @@ window.App = window.App || {};
     const view = scene.view;
     const selectedId = App.Store.getSelectedPropId();
 
-    if (App.dom.qs('#chk-grid').checked) drawGrid(view, w, h);
+    if (App.dom.qs('#chk-grid').checked) {
+      const centerPoint = setup.referencePoints.find(rp => rp.label === 'Center');
+      drawGrid(view, w, h, centerPoint);
+    }
     if (App.dom.qs('#chk-studio-sketch').checked) drawStudioSketch(view);
     drawReferencePoints(view, setup.referencePoints);
     scene.props.forEach(p => drawProp(view, p, p.id === selectedId));
@@ -319,12 +334,13 @@ window.App = window.App || {};
       const view = getView();
       const newDist = pointerDistance(pts[0], pts[1]);
       const mid = pointerMidpoint(pts[0], pts[1]);
-      const newScale = clamp(dragState.startScale * (newDist / dragState.startDist), 4, 400);
+      const newScale = clamp(dragState.startScale * (newDist / dragState.startDist), minScale, 400);
       // Keep the world point under the pinch midpoint stationary while
       // scaling, and follow the midpoint's own on-screen movement (pan).
       const worldAtStartMid = geo.screenToWorld({ ...view, scale: dragState.startScale, originX: dragState.startOrigin.x, originY: dragState.startOrigin.y }, dragState.startMid.x, dragState.startMid.y);
-      const newOriginX = mid.x + worldAtStartMid.x * newScale;
-      const newOriginY = mid.y - worldAtStartMid.y * newScale;
+      const unit = projectUnit(worldAtStartMid.x, worldAtStartMid.y);
+      const newOriginX = mid.x - unit.x * newScale;
+      const newOriginY = mid.y - unit.y * newScale;
       App.Store.setView({ scale: newScale, originX: newOriginX, originY: newOriginY });
       App.dom.qs('#view-scale').value = Math.round(newScale);
       return;
@@ -373,9 +389,10 @@ window.App = window.App || {};
     const view = getView();
     const worldPt = geo.screenToWorld(view, screen.x, screen.y);
     const factor = evt.deltaY < 0 ? 1.1 : 1 / 1.1;
-    const newScale = clamp(view.scale * factor, 4, 400);
-    const newOriginX = screen.x + worldPt.x * newScale;
-    const newOriginY = screen.y - worldPt.y * newScale;
+    const newScale = clamp(view.scale * factor, minScale, 400);
+    const unit = projectUnit(worldPt.x, worldPt.y);
+    const newOriginX = screen.x - unit.x * newScale;
+    const newOriginY = screen.y - unit.y * newScale;
     App.Store.setView({ scale: newScale, originX: newOriginX, originY: newOriginY });
     App.dom.qs('#view-scale').value = Math.round(newScale);
   }
@@ -384,12 +401,22 @@ window.App = window.App || {};
     pad = pad == null ? 40 : pad;
     const w = wrap.clientWidth, h = wrap.clientHeight;
     const worldW = Math.max(0.5, maxX - minX), worldH = Math.max(0.5, maxY - minY);
-    let scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
-    scale = clamp(scale, 4, 400);
+    let tightScale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
+    tightScale = clamp(tightScale, 4, 400);
+    // Start ~19% further out than the tightest fit (two stacked 10%
+    // reductions -- a little breathing room around the studio rather than
+    // filling every last pixel). That starting position is the maximum
+    // zoom-out -- no further slack beyond it.
+    const scale = tightScale * 0.9 * 0.9;
+    minScale = scale;
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    App.Store.setView({ scale, originX: w / 2 + cx * scale, originY: h / 2 - cy * scale });
+    const unit = projectUnit(cx, cy);
+    // Anchor a bit above vertical center (not h/2) so the wall sits slightly
+    // higher on screen instead of dead-centered.
+    const anchorY = h * 0.42;
+    App.Store.setView({ scale, originX: w / 2 - unit.x * scale, originY: anchorY - unit.y * scale });
     const scaleInput = App.dom.qs('#view-scale');
-    if (scaleInput) scaleInput.value = Math.round(scale);
+    if (scaleInput) { scaleInput.min = Math.round(minScale); scaleInput.value = Math.round(scale); }
   }
 
   App.canvas = {
@@ -420,6 +447,7 @@ window.App = window.App || {};
     },
     render,
     getCanvasElement() { return canvas; },
+    getMinScale() { return minScale; },
     fitToStudioSketch() {
       const sketch = window.App.studioSketch;
       if (!sketch) return;
@@ -440,7 +468,7 @@ window.App = window.App || {};
         if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
         if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
       });
-      if (isFinite(minX)) fitViewToBounds(minX, maxX, minY, maxY, 80);
+      if (isFinite(minX)) fitViewToBounds(minX, maxX, minY, maxY, 30);
     }
   };
 })();
