@@ -4,23 +4,38 @@ window.App = window.App || {};
 
 const DEG2RAD = Math.PI / 180;
 
+// Fixed display rotation: 180° so the curved back wall renders across the
+// top of the canvas (arcing down over the room) instead of the bottom.
+// Purely a view/rendering convention: world data (mesh, reference points,
+// saved prop positions) is untouched, so this doesn't affect measurement math.
+// (A ~0.5° rotational skew in the source mesh export -- the wall/floor not
+// being quite axis-aligned -- is corrected in the data itself, in
+// js/studioSketch.js, not here: a uniform rotation added to this shared
+// screen transform would rotate the procedurally-drawn grid by the same
+// amount, which cancels out and fixes nothing -- the grid and the mesh have
+// to be corrected relative to EACH OTHER, not both spun together.)
+const DISPLAY_ROTATION_DEG = 180;
+const DISPLAY_COS = Math.cos(DISPLAY_ROTATION_DEG * DEG2RAD);
+const DISPLAY_SIN = Math.sin(DISPLAY_ROTATION_DEG * DEG2RAD);
+
 App.geometry = {
-  // Both axes are negated relative to the raw studio-mesh coordinates -- a
-  // fixed 180-degree display rotation so the curved back wall renders across
-  // the top of the canvas (arcing down over the room) instead of the bottom.
-  // Purely a view/rendering convention: world data (mesh, reference points,
-  // saved prop positions) is untouched, so this doesn't affect measurement math.
   worldToScreen(view, x, y) {
+    const rx = x * DISPLAY_COS - y * DISPLAY_SIN;
+    const ry = x * DISPLAY_SIN + y * DISPLAY_COS;
     return {
-      x: view.originX - x * view.scale,
-      y: view.originY + y * view.scale
+      x: view.originX + rx * view.scale,
+      y: view.originY - ry * view.scale
     };
   },
 
   screenToWorld(view, sx, sy) {
+    const rx = (sx - view.originX) / view.scale;
+    const ry = (view.originY - sy) / view.scale;
+    // Inverse of the display rotation (rotation matrices are orthogonal, so
+    // the inverse is just the transpose -- rotate by -DISPLAY_ROTATION_DEG).
     return {
-      x: (view.originX - sx) / view.scale,
-      y: (sy - view.originY) / view.scale
+      x: rx * DISPLAY_COS + ry * DISPLAY_SIN,
+      y: -rx * DISPLAY_SIN + ry * DISPLAY_COS
     };
   },
 
