@@ -72,6 +72,19 @@
         <textarea id="framegrab-caption" placeholder="Caption / camera notes…" rows="2"></textarea>
       </section>
 
+      <section class="panel" id="github-panel">
+        <h3>GitHub Sync</h3>
+        <label>Personal Access Token <input id="gh-token" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false"></label>
+        <div class="two-col">
+          <label>Owner <input id="gh-owner" type="text" placeholder="e.g. Annoyingbrain" spellcheck="false"></label>
+          <label>Repo <input id="gh-repo" type="text" placeholder="e.g. StudioLayoutTool-Setups" spellcheck="false"></label>
+        </div>
+        <label>Branch <input id="gh-branch" type="text" placeholder="main" value="main" spellcheck="false"></label>
+        <button id="btn-save-github">Save Setup to GitHub</button>
+        <div id="gh-status" class="small muted"></div>
+        <p class="hint">Saves this setup as one JSON file (setups/&lt;id&gt;.json, overwritten on every save) to the repo above, via GitHub's API. The token is stored only in this browser — use a fine-grained token scoped to just that one repo with Contents: read/write.</p>
+      </section>
+
     </aside>
 
     <main id="canvas-wrap">
@@ -158,6 +171,7 @@
 <script src="js/ui/refpoints.js"></script>
 <script src="js/ui/measurement.js"></script>
 <script src="js/ui/calibration.js"></script>
+<script src="js/ui/githubSync.js"></script>
 <script src="js/ui/toolbar.js"></script>
 <script src="js/main.js"></script>
 </body>

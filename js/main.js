@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   App.refpoints.init();
   App.measurement.init();
   App.calibration.init();
+  App.githubSync.init();
   App.toolbar.init();
   App.canvas.fitToReferencePoints();
 
