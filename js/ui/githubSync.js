@@ -68,10 +68,17 @@ window.App = window.App || {};
     // The Contents API only inlines base64 content for files under ~1MB --
     // setups with an embedded frame grab easily exceed that. Fall back to
     // fetching the raw bytes directly (works up to 100MB), reusing the sha
-    // from the metadata response above.
-    const rawRes = await fetch(url, { headers: Object.assign({}, authHeaders(cfg), { Accept: 'application/vnd.github.raw' }) });
+    // from the metadata response above. Must be "application/vnd.github.raw+json"
+    // -- an unrecognized Accept value is silently ignored by GitHub, which
+    // would return this same content-less metadata JSON again instead of an
+    // error, and get misread as if it were the file's actual content.
+    const rawRes = await fetch(url, { headers: Object.assign({}, authHeaders(cfg), { Accept: 'application/vnd.github.raw+json' }) });
     if (!rawRes.ok) throw new Error(`Raw fetch of ${path} failed (${rawRes.status}): ${await rawRes.text()}`);
-    return { sha: json.sha, data: JSON.parse(await rawRes.text()) };
+    const parsed = JSON.parse(await rawRes.text());
+    if (parsed && parsed.sha === json.sha && parsed.url && parsed.type === 'file' && parsed.content === undefined) {
+      throw new Error(`Got file metadata instead of content for ${path} -- the raw-content request didn't work as expected.`);
+    }
+    return { sha: json.sha, data: parsed };
   }
 
   async function putJsonFile(cfg, path, data, sha, message) {
