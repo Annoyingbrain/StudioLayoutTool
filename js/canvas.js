@@ -349,8 +349,8 @@ window.App = window.App || {};
       // Keep the world point under the pinch midpoint stationary while
       // scaling, and follow the midpoint's own on-screen movement (pan).
       const worldAtStartMid = geo.screenToWorld({ ...view, scale: dragState.startScale, originX: dragState.startOrigin.x, originY: dragState.startOrigin.y }, dragState.startMid.x, dragState.startMid.y);
-      const newOriginX = mid.x - worldAtStartMid.x * newScale;
-      const newOriginY = mid.y + worldAtStartMid.y * newScale;
+      const newOriginX = mid.x + worldAtStartMid.x * newScale;
+      const newOriginY = mid.y - worldAtStartMid.y * newScale;
       App.Store.setView({ scale: newScale, originX: newOriginX, originY: newOriginY });
       App.dom.qs('#view-scale').value = Math.round(newScale);
       return;
@@ -404,8 +404,8 @@ window.App = window.App || {};
     const worldPt = geo.screenToWorld(view, screen.x, screen.y);
     const factor = evt.deltaY < 0 ? 1.1 : 1 / 1.1;
     const newScale = clamp(view.scale * factor, 4, 400);
-    const newOriginX = screen.x - worldPt.x * newScale;
-    const newOriginY = screen.y + worldPt.y * newScale;
+    const newOriginX = screen.x + worldPt.x * newScale;
+    const newOriginY = screen.y - worldPt.y * newScale;
     App.Store.setView({ scale: newScale, originX: newOriginX, originY: newOriginY });
     App.dom.qs('#view-scale').value = Math.round(newScale);
   }
@@ -417,7 +417,7 @@ window.App = window.App || {};
     let scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
     scale = clamp(scale, 4, 400);
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    App.Store.setView({ scale, originX: w / 2 - cx * scale, originY: h / 2 + cy * scale });
+    App.Store.setView({ scale, originX: w / 2 + cx * scale, originY: h / 2 - cy * scale });
     const scaleInput = App.dom.qs('#view-scale');
     if (scaleInput) scaleInput.value = Math.round(scale);
   }

@@ -5,17 +5,22 @@ window.App = window.App || {};
 const DEG2RAD = Math.PI / 180;
 
 App.geometry = {
+  // Both axes are negated relative to the raw studio-mesh coordinates -- a
+  // fixed 180-degree display rotation so the curved back wall renders across
+  // the top of the canvas (arcing down over the room) instead of the bottom.
+  // Purely a view/rendering convention: world data (mesh, reference points,
+  // saved prop positions) is untouched, so this doesn't affect measurement math.
   worldToScreen(view, x, y) {
     return {
-      x: view.originX + x * view.scale,
-      y: view.originY - y * view.scale
+      x: view.originX - x * view.scale,
+      y: view.originY + y * view.scale
     };
   },
 
   screenToWorld(view, sx, sy) {
     return {
-      x: (sx - view.originX) / view.scale,
-      y: (view.originY - sy) / view.scale
+      x: (view.originX - sx) / view.scale,
+      y: (sy - view.originY) / view.scale
     };
   },
 
