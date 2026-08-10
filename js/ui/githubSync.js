@@ -58,7 +58,7 @@ window.App = window.App || {};
   // Returns { sha, data } for a JSON file in the repo, or { sha: null, data: null } if it doesn't exist yet.
   async function fetchJsonFile(cfg, path) {
     const url = `${contentsUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch)}`;
-    const res = await fetch(url, { headers: authHeaders(cfg) });
+    const res = await fetch(url, { headers: authHeaders(cfg), cache: 'no-store' });
     if (res.status === 404) return { sha: null, data: null };
     if (!res.ok) throw new Error(`Fetch of ${path} failed (${res.status}): ${await res.text()}`);
     const json = await res.json();
@@ -66,19 +66,18 @@ window.App = window.App || {};
       return { sha: json.sha, data: JSON.parse(fromBase64(json.content)) };
     }
     // The Contents API only inlines base64 content for files under ~1MB --
-    // setups with an embedded frame grab easily exceed that. Fall back to
-    // fetching the raw bytes directly (works up to 100MB), reusing the sha
-    // from the metadata response above. Must be "application/vnd.github.raw+json"
-    // -- an unrecognized Accept value is silently ignored by GitHub, which
-    // would return this same content-less metadata JSON again instead of an
-    // error, and get misread as if it were the file's actual content.
-    const rawRes = await fetch(url, { headers: Object.assign({}, authHeaders(cfg), { Accept: 'application/vnd.github.raw+json' }) });
-    if (!rawRes.ok) throw new Error(`Raw fetch of ${path} failed (${rawRes.status}): ${await rawRes.text()}`);
-    const parsed = JSON.parse(await rawRes.text());
-    if (parsed && parsed.sha === json.sha && parsed.url && parsed.type === 'file' && parsed.content === undefined) {
-      throw new Error(`Got file metadata instead of content for ${path} -- the raw-content request didn't work as expected.`);
+    // setups with an embedded frame grab easily exceed that. For bigger
+    // files the same response still includes download_url, a direct link
+    // to the raw content (a signed URL for private repos, so no auth header
+    // needed) -- fetch that instead of fighting Accept-header content
+    // negotiation, which turned out not to behave as GitHub's docs suggest
+    // here (it kept silently returning this same metadata response).
+    if (!json.download_url) {
+      throw new Error(`No content or download_url for ${path} -- can't read it (too large, or not a plain file?).`);
     }
-    return { sha: json.sha, data: parsed };
+    const rawRes = await fetch(json.download_url, { cache: 'no-store' });
+    if (!rawRes.ok) throw new Error(`Download of ${path} failed (${rawRes.status}): ${await rawRes.text()}`);
+    return { sha: json.sha, data: JSON.parse(await rawRes.text()) };
   }
 
   async function putJsonFile(cfg, path, data, sha, message) {
@@ -158,7 +157,7 @@ window.App = window.App || {};
   }
 
   async function listDirectory(cfg, path) {
-    const res = await fetch(`${contentsUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch)}`, { headers: authHeaders(cfg) });
+    const res = await fetch(`${contentsUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch)}`, { headers: authHeaders(cfg), cache: 'no-store' });
     if (res.status === 404) return [];
     if (!res.ok) throw new Error(`Listing ${path} failed (${res.status}): ${await res.text()}`);
     return res.json();
