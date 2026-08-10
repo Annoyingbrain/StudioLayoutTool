@@ -1476,27 +1476,27 @@ App.studioSketch = {
   ],
   "suggestedReferencePoints": [
     {
-      "label": "P1",
+      "label": "R2",
       "x": 0.016,
       "y": -1.136
     },
     {
-      "label": "P2",
+      "label": "R1",
       "x": 1.181,
       "y": -6.407
     },
     {
-      "label": "P3",
+      "label": "Center",
       "x": 5.898,
       "y": -8.87
     },
     {
-      "label": "P4",
+      "label": "L1",
       "x": 10.646,
       "y": -6.475
     },
     {
-      "label": "P5",
+      "label": "L2",
       "x": 11.912,
       "y": -1.224
     }
