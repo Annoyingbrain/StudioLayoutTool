@@ -150,9 +150,10 @@ window.App = window.App || {};
   let refreshInFlight = false;
 
   // Reads the index manifest, then reconciles it against what's actually in
-  // the repo's setups/ folder -- picks up files saved before this Load
-  // feature existed (or added outside the app) and repairs the index so
-  // they show up going forward without a re-scan every time.
+  // the repo's setups/ folder in both directions: picks up files saved
+  // before this Load feature existed (or added outside the app), and drops
+  // entries whose file no longer exists (e.g. deleted from GitHub directly)
+  // -- so the index doesn't drift from what's really there.
   async function refreshLoadList(cfg) {
     cfg = cfg || readFields();
     const picker = dom.qs('#gh-load-picker');
@@ -163,12 +164,14 @@ window.App = window.App || {};
 
     try {
       const indexFile = await fetchJsonFile(cfg, INDEX_PATH);
-      const knownIds = new Set((indexFile.data || []).map(e => e.id));
+      const indexed = Array.isArray(indexFile.data) ? indexFile.data : [];
+      const knownIds = new Set(indexed.map(e => e.id));
 
       const files = await listDirectory(cfg, 'setups');
-      const orphanFiles = Array.isArray(files)
-        ? files.filter(f => f.type === 'file' && f.name.endsWith('.json') && f.name !== 'index.json' && !knownIds.has(f.name.replace(/\.json$/, '')))
-        : [];
+      const jsonFiles = Array.isArray(files) ? files.filter(f => f.type === 'file' && f.name.endsWith('.json') && f.name !== 'index.json') : [];
+      const existingIds = new Set(jsonFiles.map(f => f.name.replace(/\.json$/, '')));
+      const orphanFiles = jsonFiles.filter(f => !knownIds.has(f.name.replace(/\.json$/, '')));
+      const staleCount = indexed.filter(e => !existingIds.has(e.id)).length;
 
       const recovered = [];
       for (const f of orphanFiles) {
@@ -180,14 +183,19 @@ window.App = window.App || {};
         } catch (e) { /* unreadable/corrupt file -- skip it */ }
       }
 
-      let entries = Array.isArray(indexFile.data) ? indexFile.data : [];
-      if (recovered.length) {
+      let entries = indexed;
+      if (recovered.length || staleCount) {
         entries = await updateIndex(cfg, current => {
-          const ids = new Set(current.map(e => e.id));
+          const kept = current.filter(e => existingIds.has(e.id));
+          const ids = new Set(kept.map(e => e.id));
           const toAdd = recovered.filter(e => !ids.has(e.id));
-          return toAdd.length ? [...current, ...toAdd] : null;
-        }, `Repair setups index (recovered ${recovered.length} untracked setup(s))`);
-        setStatus(`Found and indexed ${recovered.length} previously-saved setup(s).`);
+          const changed = kept.length !== current.length || toAdd.length;
+          return changed ? [...kept, ...toAdd] : null;
+        }, `Repair setups index (+${recovered.length} recovered, -${staleCount} deleted)`);
+        const parts = [];
+        if (recovered.length) parts.push(`found ${recovered.length} previously-saved setup(s)`);
+        if (staleCount) parts.push(`removed ${staleCount} deleted setup(s)`);
+        setStatus(parts.join('; ') + '.');
       }
 
       entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -195,7 +203,7 @@ window.App = window.App || {};
       picker.appendChild(dom.el('option', { value: '', text: entries.length ? 'Load setup from GitHub…' : 'No saved setups yet' }));
       entries.forEach(e => {
         const when = e.updatedAt ? new Date(e.updatedAt).toLocaleString() : '';
-        picker.appendChild(dom.el('option', { value: e.id, text: `${e.name} (${e.sceneCount || 1} scene${e.sceneCount === 1 ? '' : 's'}) — ${when}` }));
+        picker.appendChild(dom.el('option', { value: e.id, text: `${e.name} (${e.sceneCount || 1} position${e.sceneCount === 1 ? '' : 's'}) — ${when}` }));
       });
     } catch (err) {
       setStatus('Could not refresh list: ' + err.message, true);
@@ -225,6 +233,22 @@ window.App = window.App || {};
     }
   }
 
+  function clearLoadPicker(text) {
+    const picker = dom.qs('#gh-load-picker');
+    dom.clear(picker);
+    picker.appendChild(dom.el('option', { value: '', text }));
+  }
+
+  // Re-fetch (or clear) the Load list whenever the repo config itself
+  // changes -- e.g. pointing at a different repo, or clearing the repo
+  // field -- so it doesn't keep showing setups from a repo you've since
+  // moved away from.
+  function onConfigFieldChange() {
+    const cfg = readFields();
+    if (configReady(cfg)) refreshLoadList(cfg);
+    else clearLoadPicker('Fill in token/owner/repo first');
+  }
+
   App.githubSync = {
     init() {
       const cfg = loadConfig();
@@ -232,6 +256,9 @@ window.App = window.App || {};
       dom.qs('#btn-save-github').addEventListener('click', saveToGitHub);
       dom.qs('#btn-refresh-github-list').addEventListener('click', () => refreshLoadList());
       dom.qs('#gh-load-picker').addEventListener('change', e => loadFromGitHub(e.target.value));
+      ['#gh-token', '#gh-owner', '#gh-repo', '#gh-branch'].forEach(sel => {
+        dom.qs(sel).addEventListener('change', onConfigFieldChange);
+      });
       if (configReady(cfg)) refreshLoadList(cfg);
     }
   };
