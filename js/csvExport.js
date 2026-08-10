@@ -27,7 +27,7 @@ App.csvExport = {
     if (!scene.props.length) { App.toast('No props to export yet.', true); return; }
     const csv = this.buildCsv(scene);
     const blob = new Blob([csv], { type: 'text/csv' });
-    const safeName = `${setup.name || 'setup'}_${scene.name || 'scene'}`.replace(/[^a-z0-9_\-]+/gi, '_');
+    const safeName = `${setup.name || 'setup'}_Position_${scene.name || '1'}`.replace(/[^a-z0-9_\-]+/gi, '_');
     App.dom.downloadBlob(`${safeName}.csv`, blob);
   }
 };

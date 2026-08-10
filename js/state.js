@@ -58,7 +58,7 @@ App.factories = {
     const now = new Date().toISOString();
     return {
       id: App.makeId('scene'),
-      name: name || 'Scene 1',
+      name: name || 'Position 1',
       createdAt: now,
       updatedAt: now,
       props: [],
@@ -69,7 +69,7 @@ App.factories = {
 
   newSetup(name, referencePoints) {
     const now = new Date().toISOString();
-    const scene = App.factories.newScene('Scene 1');
+    const scene = App.factories.newScene('Position 1');
     return {
       id: App.makeId('setup'),
       name: name || 'Untitled Setup',

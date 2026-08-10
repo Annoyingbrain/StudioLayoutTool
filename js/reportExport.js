@@ -162,9 +162,9 @@ App.reportExport = (function () {
         <div class="report-page">
           <button class="report-close">Close</button>
           <button class="report-print">Print / Save as PDF</button>
-          <h1>${setup.name} &mdash; ${scene.name}</h1>
+          <h1>${setup.name} &mdash; Position: ${scene.name}</h1>
           <div class="report-meta">
-            Generated ${now.toLocaleString()} &middot; Scene last updated ${new Date(scene.updatedAt).toLocaleString()}
+            Generated ${now.toLocaleString()} &middot; Position last updated ${new Date(scene.updatedAt).toLocaleString()}
             ${setup.notes ? '<br>' + setup.notes : ''}
           </div>
 

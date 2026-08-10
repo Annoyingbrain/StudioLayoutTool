@@ -39,14 +39,14 @@
       <button id="btn-close-left" class="panel-close" aria-label="Close panel">✕ Close</button>
 
       <section class="panel" id="scene-panel">
-        <h3>Scene</h3>
+        <h3>Position</h3>
         <select id="scene-picker"></select>
-        <label>Scene name <input id="scene-name" type="text"></label>
+        <label>Position name <input id="scene-name" type="text"></label>
         <div class="tool-row">
-          <button id="btn-new-scene">+ New Scene</button>
-          <button id="btn-delete-scene" class="danger">Delete Scene</button>
+          <button id="btn-new-scene">+ New Position</button>
+          <button id="btn-delete-scene" class="danger">Delete Position</button>
         </div>
-        <p class="hint">Each scene has its own props, positions, and frame grab. Reference points are shared across all scenes in this setup.</p>
+        <p class="hint">Each position has its own props and frame grab. Reference points are shared across all positions in this setup.</p>
       </section>
 
       <section class="panel" id="prop-list-panel">
@@ -84,7 +84,7 @@
         <label>Branch <input id="gh-branch" type="text" placeholder="main" value="main" spellcheck="false"></label>
         <button id="btn-save-github">Save Setup to GitHub</button>
         <div id="gh-status" class="small muted"></div>
-        <p class="hint">Saves this setup (all its scenes, props, frame grabs) as one JSON file (setups/&lt;id&gt;.json, overwritten on every save) to the repo above, via GitHub's API. The token is stored only in this browser — use a fine-grained token scoped to just that one repo with Contents: read/write.</p>
+        <p class="hint">Saves this setup (all its positions, props, frame grabs) as one JSON file (setups/&lt;id&gt;.json, overwritten on every save) to the repo above, via GitHub's API. The token is stored only in this browser — use a fine-grained token scoped to just that one repo with Contents: read/write.</p>
 
         <div class="subheading">Load from GitHub</div>
         <select id="gh-load-picker"><option value="">Fill in token/owner/repo first</option></select>

@@ -12,7 +12,7 @@ const LS_DEFAULT_REFS_KEY = 'vps_default_refpoints';
 // Wrap them into a single scene so old files/local saves still load.
 function migrateSetup(setup) {
   if (Array.isArray(setup.scenes) && setup.scenes.length) return setup;
-  const scene = App.factories.newScene('Scene 1');
+  const scene = App.factories.newScene('Position 1');
   scene.props = setup.props || [];
   scene.frameGrab = setup.frameGrab || null;
   scene.view = setup.view || scene.view;
