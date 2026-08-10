@@ -57,11 +57,21 @@ window.App = window.App || {};
 
   // Returns { sha, data } for a JSON file in the repo, or { sha: null, data: null } if it doesn't exist yet.
   async function fetchJsonFile(cfg, path) {
-    const res = await fetch(`${contentsUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch)}`, { headers: authHeaders(cfg) });
+    const url = `${contentsUrl(cfg, path)}?ref=${encodeURIComponent(cfg.branch)}`;
+    const res = await fetch(url, { headers: authHeaders(cfg) });
     if (res.status === 404) return { sha: null, data: null };
     if (!res.ok) throw new Error(`Fetch of ${path} failed (${res.status}): ${await res.text()}`);
     const json = await res.json();
-    return { sha: json.sha, data: JSON.parse(fromBase64(json.content)) };
+    if (json.content) {
+      return { sha: json.sha, data: JSON.parse(fromBase64(json.content)) };
+    }
+    // The Contents API only inlines base64 content for files under ~1MB --
+    // setups with an embedded frame grab easily exceed that. Fall back to
+    // fetching the raw bytes directly (works up to 100MB), reusing the sha
+    // from the metadata response above.
+    const rawRes = await fetch(url, { headers: Object.assign({}, authHeaders(cfg), { Accept: 'application/vnd.github.raw' }) });
+    if (!rawRes.ok) throw new Error(`Raw fetch of ${path} failed (${rawRes.status}): ${await rawRes.text()}`);
+    return { sha: json.sha, data: JSON.parse(await rawRes.text()) };
   }
 
   async function putJsonFile(cfg, path, data, sha, message) {
