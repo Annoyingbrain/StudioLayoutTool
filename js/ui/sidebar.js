@@ -46,6 +46,19 @@ window.App = window.App || {};
     });
   }
 
+  function renderPropPicker() {
+    const setup = App.Store.getSetup();
+    const selectedId = App.Store.getSelectedPropId();
+    const picker = dom.qs('#insp-prop-picker');
+    if (document.activeElement === picker) return;
+    dom.clear(picker);
+    picker.appendChild(dom.el('option', { value: '', text: 'Select a prop…' }));
+    setup.props.forEach(p => {
+      picker.appendChild(dom.el('option', { value: p.id, text: p.name }));
+    });
+    picker.value = selectedId && setup.props.some(p => p.id === selectedId) ? selectedId : '';
+  }
+
   function setVal(id, val) {
     const el = dom.qs(id);
     if (document.activeElement === el) return;
@@ -122,13 +135,17 @@ window.App = window.App || {};
       if (!prop) return;
       if (confirm(`Delete "${prop.name}"?`)) App.Store.removeProp(prop.id);
     });
+
+    dom.qs('#insp-prop-picker').addEventListener('change', e => {
+      App.Store.selectProp(e.target.value || null);
+    });
   }
 
   App.sidebar = {
     init() {
       bindInspector();
-      App.Store.subscribe(() => { renderPropList(); renderInspector(); });
-      renderPropList(); renderInspector();
+      App.Store.subscribe(() => { renderPropList(); renderPropPicker(); renderInspector(); });
+      renderPropList(); renderPropPicker(); renderInspector();
     }
   };
 })();
