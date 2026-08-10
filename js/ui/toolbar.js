@@ -61,8 +61,33 @@ window.App = window.App || {};
     if (setup) App.Store.setSetup(setup);
   }
 
+  function initPanelDrawers() {
+    const left = dom.qs('#left-panel');
+    const right = dom.qs('#right-panel');
+    const backdrop = dom.qs('#panel-backdrop');
+
+    function closeAll() {
+      left.classList.remove('open');
+      right.classList.remove('open');
+      backdrop.classList.remove('open');
+    }
+    function toggle(panel) {
+      const willOpen = !panel.classList.contains('open');
+      closeAll();
+      if (willOpen) { panel.classList.add('open'); backdrop.classList.add('open'); }
+    }
+
+    dom.qs('#btn-toggle-left').addEventListener('click', () => toggle(left));
+    dom.qs('#btn-toggle-right').addEventListener('click', () => toggle(right));
+    dom.qs('#btn-close-left').addEventListener('click', closeAll);
+    dom.qs('#btn-close-right').addEventListener('click', closeAll);
+    backdrop.addEventListener('click', closeAll);
+  }
+
   App.toolbar = {
     init() {
+      initPanelDrawers();
+
       dom.qs('#setup-name').addEventListener('input', e => {
         App.Store.getSetup().name = e.target.value;
         App.Store.touch();

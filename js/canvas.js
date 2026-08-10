@@ -11,6 +11,9 @@ window.App = window.App || {};
   let dragState = null;
   let spaceDown = false;
   let bgImageCache = { url: null, img: null };
+  // Active touch/pen contacts by pointerId, for pinch-to-zoom (two-finger)
+  // gesture detection alongside the existing single-pointer drag logic.
+  const activePointers = new Map();
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -233,23 +236,50 @@ window.App = window.App || {};
     return null;
   }
 
-  function hitTestHandles(view, prop, screenPt) {
+  function hitTestHandles(view, prop, screenPt, pointerType) {
+    // Fingertips are much less precise than a mouse cursor, so touch/pen
+    // contacts get a wider hit-test tolerance around each handle.
+    const pad = pointerType === 'touch' || pointerType === 'pen' ? 16 : 3;
     const corners = geo.propCorners(prop).map(p => geo.worldToScreen(view, p.x, p.y));
     for (let i = 0; i < corners.length; i++) {
-      if (geo.distance(screenPt.x, screenPt.y, corners[i].x, corners[i].y) <= HANDLE_R + 3) {
+      if (geo.distance(screenPt.x, screenPt.y, corners[i].x, corners[i].y) <= HANDLE_R + pad) {
         return { kind: 'select-point', cornerIndex: i };
       }
     }
     const rotWorld = geo.rotationHandlePos(prop);
     const rotScreen = geo.worldToScreen(view, rotWorld.x, rotWorld.y);
-    if (geo.distance(screenPt.x, screenPt.y, rotScreen.x, rotScreen.y) <= ROT_HANDLE_R + 3) {
+    if (geo.distance(screenPt.x, screenPt.y, rotScreen.x, rotScreen.y) <= ROT_HANDLE_R + pad) {
       return { kind: 'rotate' };
     }
     return null;
   }
 
+  function pointerDistance(a, b) { return geo.distance(a.x, a.y, b.x, b.y); }
+  function pointerMidpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
+  function startPinch() {
+    const pts = Array.from(activePointers.values());
+    const view = getView();
+    dragState = {
+      kind: 'pinch',
+      ids: Array.from(activePointers.keys()),
+      startDist: pointerDistance(pts[0], pts[1]),
+      startMid: pointerMidpoint(pts[0], pts[1]),
+      startScale: view.scale,
+      startOrigin: { x: view.originX, y: view.originY }
+    };
+  }
+
   function onPointerDown(evt) {
+    canvas.setPointerCapture(evt.pointerId);
     const { screen, world } = mouseWorld(evt);
+
+    if (evt.pointerType !== 'mouse') {
+      activePointers.set(evt.pointerId, screen);
+      if (activePointers.size === 2) { startPinch(); return; }
+      if (activePointers.size > 2) return; // ignore a 3rd+ contact
+    }
+
     const setup = App.Store.getSetup();
 
     if (App.calibration && App.calibration.isActive()) {
@@ -276,7 +306,7 @@ window.App = window.App || {};
 
     const selected = App.Store.getSelectedProp();
     if (selected) {
-      const handle = hitTestHandles(setup.view, selected, screen);
+      const handle = hitTestHandles(setup.view, selected, screen, evt.pointerType);
       if (handle && handle.kind === 'rotate') {
         dragState = { kind: 'rotate', propId: selected.id, center: { x: selected.x, y: selected.y } };
         return;
@@ -291,6 +321,11 @@ window.App = window.App || {};
     if (hit) {
       App.Store.selectProp(hit.id);
       dragState = { kind: 'move', propId: hit.id, startWorld: world, startProp: { x: hit.x, y: hit.y } };
+    } else if (evt.pointerType === 'touch' || evt.pointerType === 'pen') {
+      // No space-bar/middle-click on touch -- a single-finger drag that
+      // doesn't start on a prop pans the view instead of doing nothing.
+      App.Store.selectProp(null);
+      dragState = { kind: 'pan', startScreen: screen, startOrigin: { x: setup.view.originX, y: setup.view.originY } };
     } else {
       App.Store.selectProp(null);
     }
@@ -299,6 +334,28 @@ window.App = window.App || {};
   function round3(v) { return Math.round(v * 1000) / 1000; }
 
   function onPointerMove(evt) {
+    if (evt.pointerType !== 'mouse' && activePointers.has(evt.pointerId)) {
+      const { screen } = mouseWorld(evt);
+      activePointers.set(evt.pointerId, screen);
+    }
+
+    if (dragState && dragState.kind === 'pinch') {
+      const pts = dragState.ids.map(id => activePointers.get(id)).filter(Boolean);
+      if (pts.length < 2) return;
+      const view = getView();
+      const newDist = pointerDistance(pts[0], pts[1]);
+      const mid = pointerMidpoint(pts[0], pts[1]);
+      const newScale = clamp(dragState.startScale * (newDist / dragState.startDist), 4, 400);
+      // Keep the world point under the pinch midpoint stationary while
+      // scaling, and follow the midpoint's own on-screen movement (pan).
+      const worldAtStartMid = geo.screenToWorld({ ...view, scale: dragState.startScale, originX: dragState.startOrigin.x, originY: dragState.startOrigin.y }, dragState.startMid.x, dragState.startMid.y);
+      const newOriginX = mid.x - worldAtStartMid.x * newScale;
+      const newOriginY = mid.y + worldAtStartMid.y * newScale;
+      App.Store.setView({ scale: newScale, originX: newOriginX, originY: newOriginY });
+      App.dom.qs('#view-scale').value = Math.round(newScale);
+      return;
+    }
+
     if (!dragState) {
       if (App.calibration && App.calibration.isActive()) render();
       return;
@@ -331,7 +388,11 @@ window.App = window.App || {};
 
   }
 
-  function onPointerUp() {
+  function onPointerUp(evt) {
+    if (evt && evt.pointerType !== 'mouse') {
+      activePointers.delete(evt.pointerId);
+      if (dragState && dragState.kind === 'pinch') dragState = null;
+    }
     if (dragState && dragState.kind === 'pan') canvas.style.cursor = 'default';
     dragState = null;
   }
@@ -367,9 +428,15 @@ window.App = window.App || {};
       wrap = App.dom.qs('#canvas-wrap');
       ctx = canvas.getContext('2d');
 
-      canvas.addEventListener('mousedown', onPointerDown);
-      window.addEventListener('mousemove', onPointerMove);
-      window.addEventListener('mouseup', onPointerUp);
+      // Pointer Events unify mouse/touch/pen. Capturing the pointer on the
+      // canvas keeps move/up events flowing to it even if the drag leaves
+      // the canvas bounds mid-gesture (fast pans, dragging a prop to the
+      // window edge), for every input type, without separate window-level
+      // mouse listeners.
+      canvas.addEventListener('pointerdown', onPointerDown);
+      canvas.addEventListener('pointermove', onPointerMove);
+      canvas.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('pointercancel', onPointerUp);
       canvas.addEventListener('wheel', onWheel, { passive: false });
       canvas.addEventListener('contextmenu', e => e.preventDefault());
 

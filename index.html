@@ -12,6 +12,7 @@
 
   <header id="toolbar">
     <div class="toolbar-group">
+      <button id="btn-toggle-left" class="panel-toggle" aria-label="Toggle layers panel">☰ Layers</button>
       <strong class="brand">Studio Layout Tool</strong>
       <input id="setup-name" type="text" value="Untitled Setup" spellcheck="false">
     </div>
@@ -25,12 +26,17 @@
     <div class="toolbar-group">
       <button id="btn-export-csv">Export CSV (Disguise)</button>
       <button id="btn-report">Report / Print</button>
+      <button id="btn-toggle-right" class="panel-toggle" aria-label="Toggle inspector panel">Inspector ⚙</button>
     </div>
   </header>
 
   <div id="main-body">
 
+    <div id="panel-backdrop"></div>
+
     <aside id="left-panel">
+
+      <button id="btn-close-left" class="panel-close" aria-label="Close panel">✕ Close</button>
 
       <section class="panel">
         <h3>Tools</h3>
@@ -74,6 +80,8 @@
     </main>
 
     <aside id="right-panel">
+
+      <button id="btn-close-right" class="panel-close" aria-label="Close panel">✕ Close</button>
 
       <section class="panel" id="inspector-panel">
         <h3>Prop Inspector</h3>
