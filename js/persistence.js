@@ -7,6 +7,25 @@ const LS_INDEX_KEY = 'vps_setups_index';
 const LS_SETUP_PREFIX = 'vps_setup_';
 const LS_DEFAULT_REFS_KEY = 'vps_default_refpoints';
 
+// Older saved/exported setups (before multi-scene support) kept props,
+// frameGrab and view directly on the setup instead of inside a scenes array.
+// Wrap them into a single scene so old files/local saves still load.
+function migrateSetup(setup) {
+  if (Array.isArray(setup.scenes) && setup.scenes.length) return setup;
+  const scene = App.factories.newScene('Scene 1');
+  scene.props = setup.props || [];
+  scene.frameGrab = setup.frameGrab || null;
+  scene.view = setup.view || scene.view;
+  scene.createdAt = setup.createdAt || scene.createdAt;
+  scene.updatedAt = setup.updatedAt || scene.updatedAt;
+  delete setup.props;
+  delete setup.frameGrab;
+  delete setup.view;
+  setup.scenes = [scene];
+  setup.activeSceneId = scene.id;
+  return setup;
+}
+
 App.persistence = {
   listLocal() {
     try {
@@ -30,7 +49,7 @@ App.persistence = {
 
   loadLocal(id) {
     const raw = localStorage.getItem(LS_SETUP_PREFIX + id);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? migrateSetup(JSON.parse(raw)) : null;
   },
 
   deleteLocal(id) {
@@ -64,9 +83,10 @@ App.persistence = {
   async importFromFile(file) {
     const text = await App.dom.readFileAsText(file);
     const setup = JSON.parse(text);
-    if (!setup.props || !setup.referencePoints || !setup.view) {
+    const looksValid = setup.referencePoints && (Array.isArray(setup.scenes) || setup.props || setup.view);
+    if (!looksValid) {
       throw new Error('This file does not look like a Studio Layout Tool setup.');
     }
-    return setup;
+    return migrateSetup(setup);
   }
 };

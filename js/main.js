@@ -26,14 +26,13 @@ document.addEventListener('DOMContentLoaded', () => {
   App.sidebar.init();
   App.refpoints.init();
   App.measurement.init();
-  App.calibration.init();
   App.githubSync.init();
   App.toolbar.init();
   App.canvas.fitToReferencePoints();
 
   window.addEventListener('beforeunload', (e) => {
     const setup = App.Store.getSetup();
-    if (setup.props.length > 0) {
+    if (setup.scenes.some(s => s.props.length > 0)) {
       e.preventDefault();
       e.returnValue = '';
     }

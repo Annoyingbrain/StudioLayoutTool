@@ -10,9 +10,9 @@ App.csvExport = {
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   },
 
-  buildCsv(setup) {
+  buildCsv(scene) {
     const rows = [this.HEADER.join(',')];
-    setup.props.forEach(p => {
+    scene.props.forEach(p => {
       rows.push([
         p.name, p.x, p.y, 0, p.rotationDeg,
         p.widthM, p.depthM, p.heightM, p.notes
@@ -21,11 +21,13 @@ App.csvExport = {
     return rows.join('\r\n') + '\r\n';
   },
 
-  exportSetup(setup) {
-    if (!setup.props.length) { App.toast('No props to export yet.', true); return; }
-    const csv = this.buildCsv(setup);
+  // Exports the given scene's props (not the whole setup) -- each scene is
+  // its own shot/layout and gets its own CSV.
+  exportSetup(setup, scene) {
+    if (!scene.props.length) { App.toast('No props to export yet.', true); return; }
+    const csv = this.buildCsv(scene);
     const blob = new Blob([csv], { type: 'text/csv' });
-    const safeName = (setup.name || 'setup').replace(/[^a-z0-9_\-]+/gi, '_');
+    const safeName = `${setup.name || 'setup'}_${scene.name || 'scene'}`.replace(/[^a-z0-9_\-]+/gi, '_');
     App.dom.downloadBlob(`${safeName}.csv`, blob);
   }
 };

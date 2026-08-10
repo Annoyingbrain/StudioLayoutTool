@@ -142,7 +142,7 @@ label input, label select, label textarea {
 label input[type="color"] { padding: 2px; height: 30px; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-#insp-prop-picker { display: block; width: 100%; margin-bottom: 10px; }
+#insp-prop-picker, #scene-picker { display: block; width: 100%; margin-bottom: 10px; }
 
 .muted { color: var(--muted); }
 .small { font-size: 12px; }

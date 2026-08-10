@@ -4,7 +4,10 @@
 window.App = window.App || {};
 
 App.reportExport = {
-  open(setup) {
+  // Reports the given scene (props, frame grab) within the setup (name,
+  // reference points) -- each scene is its own shot/layout and gets its own
+  // report.
+  open(setup, scene) {
     const dom = App.dom;
     const view = dom.qs('#report-view');
     dom.clear(view);
@@ -12,7 +15,7 @@ App.reportExport = {
     const snapshot = App.canvas.getCanvasElement().toDataURL('image/png');
     const now = new Date();
 
-    const propsRows = setup.props.map(p => `
+    const propsRows = scene.props.map(p => `
       <tr>
         <td>${p.name}</td>
         <td>${p.x.toFixed(3)}</td>
@@ -30,17 +33,17 @@ App.reportExport = {
 
     const images = [];
     images.push(`<figure><img src="${snapshot}"><figcaption>Top-down layout snapshot</figcaption></figure>`);
-    if (setup.frameGrab) {
-      images.push(`<figure><img src="${setup.frameGrab.imageDataUrl}"><figcaption>${setup.frameGrab.caption || 'Frame grab reference'}</figcaption></figure>`);
+    if (scene.frameGrab) {
+      images.push(`<figure><img src="${scene.frameGrab.imageDataUrl}"><figcaption>${scene.frameGrab.caption || 'Frame grab reference'}</figcaption></figure>`);
     }
 
     view.innerHTML = `
       <div class="report-page">
         <button class="report-close">Close</button>
         <button class="report-print">Print / Save as PDF</button>
-        <h1>${setup.name}</h1>
+        <h1>${setup.name} &mdash; ${scene.name}</h1>
         <div class="report-meta">
-          Generated ${now.toLocaleString()} &middot; Setup last updated ${new Date(setup.updatedAt).toLocaleString()}
+          Generated ${now.toLocaleString()} &middot; Scene last updated ${new Date(scene.updatedAt).toLocaleString()}
           ${setup.notes ? '<br>' + setup.notes : ''}
         </div>
 

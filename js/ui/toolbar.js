@@ -22,13 +22,30 @@ window.App = window.App || {};
     dom.qs('#setup-name').value = App.Store.getSetup().name;
   }
 
+  function syncScenePanel() {
+    const picker = dom.qs('#scene-picker');
+    const activeId = App.Store.getActiveSceneId();
+    const scenes = App.Store.getScenes();
+
+    if (document.activeElement !== picker) {
+      dom.clear(picker);
+      scenes.forEach(s => picker.appendChild(dom.el('option', { value: s.id, text: s.name })));
+      picker.value = activeId;
+    }
+
+    const nameInput = dom.qs('#scene-name');
+    if (document.activeElement !== nameInput) nameInput.value = App.Store.getScene().name;
+
+    dom.qs('#btn-delete-scene').disabled = scenes.length <= 1;
+  }
+
   function syncTools() {
     const tool = App.Store.getTool();
     dom.qsa('.tool-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tool === tool));
   }
 
   function syncFrameGrab() {
-    const fg = App.Store.getSetup().frameGrab;
+    const fg = App.Store.getScene().frameGrab;
     const thumb = dom.qs('#framegrab-thumb');
     const caption = dom.qs('#framegrab-caption');
     if (fg) {
@@ -93,6 +110,23 @@ window.App = window.App || {};
         App.Store.touch();
       });
 
+      dom.qs('#scene-picker').addEventListener('change', e => App.Store.selectScene(e.target.value));
+      dom.qs('#scene-name').addEventListener('input', e => {
+        App.Store.renameScene(App.Store.getActiveSceneId(), e.target.value);
+      });
+      dom.qs('#btn-new-scene').addEventListener('click', () => {
+        const scene = App.Store.addScene(`Scene ${App.Store.getScenes().length + 1}`);
+        App.canvas.fitToReferencePoints();
+        App.toast(`Added "${scene.name}".`);
+      });
+      dom.qs('#btn-delete-scene').addEventListener('click', () => {
+        const scene = App.Store.getScene();
+        if (App.Store.getScenes().length <= 1) return;
+        if (confirm(`Delete "${scene.name}" and all its props? This can't be undone.`)) {
+          App.Store.removeScene(scene.id);
+        }
+      });
+
       dom.qs('#btn-new').addEventListener('click', newSetup);
       dom.qs('#btn-save-local').addEventListener('click', saveLocal);
       dom.qs('#setup-picker').addEventListener('change', e => loadLocal(e.target.value));
@@ -111,8 +145,8 @@ window.App = window.App || {};
         }
       });
 
-      dom.qs('#btn-export-csv').addEventListener('click', () => App.csvExport.exportSetup(App.Store.getSetup()));
-      dom.qs('#btn-report').addEventListener('click', () => App.reportExport.open(App.Store.getSetup()));
+      dom.qs('#btn-export-csv').addEventListener('click', () => App.csvExport.exportSetup(App.Store.getSetup(), App.Store.getScene()));
+      dom.qs('#btn-report').addEventListener('click', () => App.reportExport.open(App.Store.getSetup(), App.Store.getScene()));
 
       dom.qsa('.tool-btn').forEach(btn => {
         btn.addEventListener('click', () => App.Store.setTool(btn.dataset.tool));
@@ -130,17 +164,17 @@ window.App = window.App || {};
         e.target.value = '';
         if (!file) return;
         const dataUrl = await dom.readFileAsDataUrl(file);
-        App.Store.setFrameGrab({ imageDataUrl: dataUrl, caption: (App.Store.getSetup().frameGrab || {}).caption || '' });
+        App.Store.setFrameGrab({ imageDataUrl: dataUrl, caption: (App.Store.getScene().frameGrab || {}).caption || '' });
       });
       dom.qs('#framegrab-caption').addEventListener('input', e => {
-        const setup = App.Store.getSetup();
-        if (!setup.frameGrab) return;
-        setup.frameGrab.caption = e.target.value;
+        const scene = App.Store.getScene();
+        if (!scene.frameGrab) return;
+        scene.frameGrab.caption = e.target.value;
         App.Store.touch();
       });
 
-      App.Store.subscribe(() => { syncSetupName(); syncTools(); syncFrameGrab(); });
-      syncSetupName(); syncTools(); syncFrameGrab();
+      App.Store.subscribe(() => { syncSetupName(); syncScenePanel(); syncTools(); syncFrameGrab(); });
+      syncSetupName(); syncScenePanel(); syncTools(); syncFrameGrab();
       refreshSetupPicker();
     },
     refreshSetupPicker

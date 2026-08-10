@@ -24,13 +24,13 @@ window.App = window.App || {};
   }
 
   function renderPropList() {
-    const setup = App.Store.getSetup();
+    const scene = App.Store.getScene();
     const selectedId = App.Store.getSelectedPropId();
     const list = dom.qs('#prop-list');
-    dom.qs('#prop-count').textContent = `(${setup.props.length})`;
+    dom.qs('#prop-count').textContent = `(${scene.props.length})`;
     dom.clear(list);
 
-    setup.props.forEach(p => {
+    scene.props.forEach(p => {
       const row = dom.el('div', {
         class: 'prop-row' + (p.id === selectedId ? ' selected' : ''),
         onclick: () => App.Store.selectProp(p.id)
@@ -47,16 +47,16 @@ window.App = window.App || {};
   }
 
   function renderPropPicker() {
-    const setup = App.Store.getSetup();
+    const scene = App.Store.getScene();
     const selectedId = App.Store.getSelectedPropId();
     const picker = dom.qs('#insp-prop-picker');
     if (document.activeElement === picker) return;
     dom.clear(picker);
     picker.appendChild(dom.el('option', { value: '', text: 'Select a prop…' }));
-    setup.props.forEach(p => {
+    scene.props.forEach(p => {
       picker.appendChild(dom.el('option', { value: p.id, text: p.name }));
     });
-    picker.value = selectedId && setup.props.some(p => p.id === selectedId) ? selectedId : '';
+    picker.value = selectedId && scene.props.some(p => p.id === selectedId) ? selectedId : '';
   }
 
   function setVal(id, val) {

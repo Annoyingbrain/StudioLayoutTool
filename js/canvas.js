@@ -1,5 +1,5 @@
-// The 2D top-down studio canvas: grid, background reference image, reference
-// points, props (cubes/rectangles) with drag-move, drag-rotate and drag-resize.
+// The 2D top-down studio canvas: grid, reference points, props (cubes/rectangles)
+// with drag-move, drag-rotate and drag-resize.
 window.App = window.App || {};
 
 (function () {
@@ -10,7 +10,6 @@ window.App = window.App || {};
   let canvas, ctx, wrap;
   let dragState = null;
   let spaceDown = false;
-  let bgImageCache = { url: null, img: null };
   // Active touch/pen contacts by pointerId, for pinch-to-zoom (two-finger)
   // gesture detection alongside the existing single-pointer drag logic.
   const activePointers = new Map();
@@ -29,7 +28,7 @@ window.App = window.App || {};
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function getView() { return App.Store.getSetup().view; }
+  function getView() { return App.Store.getScene().view; }
 
   function mouseWorld(evt) {
     const rect = canvas.getBoundingClientRect();
@@ -70,24 +69,6 @@ window.App = window.App || {};
     ctx.beginPath(); ctx.moveTo(ox.x, ox.y); ctx.lineTo(ox2.x, ox2.y); ctx.stroke();
     const oy = geo.worldToScreen(view, 0, minY), oy2 = geo.worldToScreen(view, 0, maxY);
     ctx.beginPath(); ctx.moveTo(oy.x, oy.y); ctx.lineTo(oy2.x, oy2.y); ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawBackground(view, background) {
-    if (!background) return;
-    if (bgImageCache.url !== background.imageDataUrl) {
-      const img = new Image();
-      img.src = background.imageDataUrl;
-      bgImageCache = { url: background.imageDataUrl, img };
-    }
-    const img = bgImageCache.img;
-    if (!img.complete || !img.naturalWidth) return;
-    const widthM = background.pxWidth / background.pxPerMeter;
-    const heightM = background.pxHeight / background.pxPerMeter;
-    const topLeft = geo.worldToScreen(view, background.originWorld.x, background.originWorld.y);
-    ctx.save();
-    ctx.globalAlpha = 0.85;
-    ctx.drawImage(img, topLeft.x, topLeft.y, widthM * view.scale, heightM * view.scale);
     ctx.restore();
   }
 
@@ -201,18 +182,19 @@ window.App = window.App || {};
     const w = wrap.clientWidth, h = wrap.clientHeight;
     ctx.clearRect(0, 0, w, h);
     const setup = App.Store.getSetup();
-    const view = setup.view;
+    const scene = App.Store.getScene();
+    const view = scene.view;
     const selectedId = App.Store.getSelectedPropId();
 
     if (App.dom.qs('#chk-grid').checked) drawGrid(view, w, h);
-    drawBackground(view, setup.background);
     if (App.dom.qs('#chk-studio-sketch').checked) drawStudioSketch(view);
     drawReferencePoints(view, setup.referencePoints);
-    setup.props.forEach(p => drawProp(view, p, p.id === selectedId));
+    scene.props.forEach(p => drawProp(view, p, p.id === selectedId));
 
-    if (App.calibration && App.calibration.isActive()) {
-      App.calibration.drawPickedPoints(ctx, view);
-    }
+    // Each scene has its own pan/zoom; keep the px/m readout in sync when
+    // switching scenes (not just when zooming the current one).
+    const scaleInput = App.dom.qs('#view-scale');
+    if (document.activeElement !== scaleInput) scaleInput.value = Math.round(view.scale);
 
     updateHint();
   }
@@ -220,18 +202,16 @@ window.App = window.App || {};
   function updateHint() {
     const hint = App.dom.qs('#canvas-hint');
     const tool = App.Store.getTool();
-    if (App.calibration && App.calibration.isActive()) {
-      hint.textContent = App.calibration.hintText();
-    } else if (tool === 'add-prop') {
+    if (tool === 'add-prop') {
       hint.textContent = 'Click on the canvas to place the prop.';
     } else {
       hint.textContent = 'Drag to move · click a corner to select it for measuring · top handle rotates · wheel to zoom · middle-drag or space+drag to pan';
     }
   }
 
-  function hitTestProp(setup, worldPt) {
-    for (let i = setup.props.length - 1; i >= 0; i--) {
-      if (geo.pointInProp(worldPt.x, worldPt.y, setup.props[i])) return setup.props[i];
+  function hitTestProp(scene, worldPt) {
+    for (let i = scene.props.length - 1; i >= 0; i--) {
+      if (geo.pointInProp(worldPt.x, worldPt.y, scene.props[i])) return scene.props[i];
     }
     return null;
   }
@@ -280,23 +260,17 @@ window.App = window.App || {};
       if (activePointers.size > 2) return; // ignore a 3rd+ contact
     }
 
-    const setup = App.Store.getSetup();
-
-    if (App.calibration && App.calibration.isActive()) {
-      App.calibration.pick(screen, world);
-      render();
-      return;
-    }
+    const scene = App.Store.getScene();
 
     if (evt.button === 1 || (evt.button === 0 && spaceDown)) {
-      dragState = { kind: 'pan', startScreen: screen, startOrigin: { x: setup.view.originX, y: setup.view.originY } };
+      dragState = { kind: 'pan', startScreen: screen, startOrigin: { x: scene.view.originX, y: scene.view.originY } };
       canvas.style.cursor = 'grabbing';
       return;
     }
 
     const tool = App.Store.getTool();
     if (evt.button === 0 && tool === 'add-prop') {
-      const prop = App.factories.newProp(round3(world.x), round3(world.y), setup.props.length);
+      const prop = App.factories.newProp(round3(world.x), round3(world.y), scene.props.length);
       App.Store.addProp(prop);
       App.Store.setTool('select');
       return;
@@ -306,7 +280,7 @@ window.App = window.App || {};
 
     const selected = App.Store.getSelectedProp();
     if (selected) {
-      const handle = hitTestHandles(setup.view, selected, screen, evt.pointerType);
+      const handle = hitTestHandles(scene.view, selected, screen, evt.pointerType);
       if (handle && handle.kind === 'rotate') {
         dragState = { kind: 'rotate', propId: selected.id, center: { x: selected.x, y: selected.y } };
         return;
@@ -317,7 +291,7 @@ window.App = window.App || {};
       }
     }
 
-    const hit = hitTestProp(setup, world);
+    const hit = hitTestProp(scene, world);
     if (hit) {
       App.Store.selectProp(hit.id);
       dragState = { kind: 'move', propId: hit.id, startWorld: world, startProp: { x: hit.x, y: hit.y } };
@@ -325,7 +299,7 @@ window.App = window.App || {};
       // No space-bar/middle-click on touch -- a single-finger drag that
       // doesn't start on a prop pans the view instead of doing nothing.
       App.Store.selectProp(null);
-      dragState = { kind: 'pan', startScreen: screen, startOrigin: { x: setup.view.originX, y: setup.view.originY } };
+      dragState = { kind: 'pan', startScreen: screen, startOrigin: { x: scene.view.originX, y: scene.view.originY } };
     } else {
       App.Store.selectProp(null);
     }
@@ -356,12 +330,8 @@ window.App = window.App || {};
       return;
     }
 
-    if (!dragState) {
-      if (App.calibration && App.calibration.isActive()) render();
-      return;
-    }
+    if (!dragState) return;
     const { screen, world } = mouseWorld(evt);
-    const setup = App.Store.getSetup();
 
     if (dragState.kind === 'pan') {
       const dx = screen.x - dragState.startScreen.x, dy = screen.y - dragState.startScreen.y;

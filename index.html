@@ -38,6 +38,22 @@
 
       <button id="btn-close-left" class="panel-close" aria-label="Close panel">✕ Close</button>
 
+      <section class="panel" id="scene-panel">
+        <h3>Scene</h3>
+        <select id="scene-picker"></select>
+        <label>Scene name <input id="scene-name" type="text"></label>
+        <div class="tool-row">
+          <button id="btn-new-scene">+ New Scene</button>
+          <button id="btn-delete-scene" class="danger">Delete Scene</button>
+        </div>
+        <p class="hint">Each scene has its own props, positions, and frame grab. Reference points are shared across all scenes in this setup.</p>
+      </section>
+
+      <section class="panel" id="prop-list-panel">
+        <h3>Props <span id="prop-count" class="muted"></span></h3>
+        <div id="prop-list"></div>
+      </section>
+
       <section class="panel">
         <h3>Tools</h3>
         <div class="tool-row">
@@ -49,20 +65,6 @@
           <label class="chk"><input type="checkbox" id="chk-studio-sketch" checked> Show studio sketch</label>
           <label class="chk">px/m: <input type="number" id="view-scale" value="40" min="4" max="400" step="1"></label>
         </div>
-      </section>
-
-      <section class="panel" id="prop-list-panel">
-        <h3>Props <span id="prop-count" class="muted"></span></h3>
-        <div id="prop-list"></div>
-      </section>
-
-      <section class="panel" id="background-panel">
-        <h3>Background / Studio Reference</h3>
-        <label class="file-btn block">Import reference image<input id="import-bg" type="file" accept="image/*"></label>
-        <div id="bg-info" class="muted small"></div>
-        <button id="btn-calibrate" disabled>Calibrate scale (click 2 pts)</button>
-        <button id="btn-clear-bg" disabled>Remove background</button>
-        <p class="hint">Drop a top-down render/photo of the studio here, then calibrate it against a known real-world distance. The studio's fixed floor-plan sketch (room shell + curved LED wall) is always drawn underneath as a reference.</p>
       </section>
 
       <section class="panel" id="framegrab-panel">
@@ -170,7 +172,6 @@
 <script src="js/ui/sidebar.js"></script>
 <script src="js/ui/refpoints.js"></script>
 <script src="js/ui/measurement.js"></script>
-<script src="js/ui/calibration.js"></script>
 <script src="js/ui/githubSync.js"></script>
 <script src="js/ui/toolbar.js"></script>
 <script src="js/main.js"></script>

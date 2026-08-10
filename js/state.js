@@ -50,8 +50,26 @@ App.factories = {
     };
   },
 
+  // A scene is one prop layout within a setup -- e.g. different camera
+  // angles or shots filmed in the same physical studio configuration.
+  // Reference points live on the setup itself (shared across all its
+  // scenes); props, frame grab, and view are per-scene.
+  newScene(name) {
+    const now = new Date().toISOString();
+    return {
+      id: App.makeId('scene'),
+      name: name || 'Scene 1',
+      createdAt: now,
+      updatedAt: now,
+      props: [],
+      frameGrab: null,    // { imageDataUrl, caption }
+      view: { scale: 40, originX: 400, originY: 400 }
+    };
+  },
+
   newSetup(name, referencePoints) {
     const now = new Date().toISOString();
+    const scene = App.factories.newScene('Scene 1');
     return {
       id: App.makeId('setup'),
       name: name || 'Untitled Setup',
@@ -59,10 +77,8 @@ App.factories = {
       updatedAt: now,
       notes: '',
       referencePoints: referencePoints || App.factories.defaultReferencePoints(),
-      props: [],
-      background: null,   // { imageDataUrl, pxWidth, pxHeight, pxPerMeter, originPx: {x,y} }
-      frameGrab: null,    // { imageDataUrl, caption }
-      view: { scale: 40, originX: 400, originY: 400 }
+      scenes: [scene],
+      activeSceneId: scene.id
     };
   }
 };
@@ -74,6 +90,7 @@ App.Store = (function () {
   const listeners = [];
 
   function emit() { listeners.forEach(fn => fn(setup)); }
+  function currentScene() { return setup.scenes.find(s => s.id === setup.activeSceneId) || setup.scenes[0]; }
 
   return {
     subscribe(fn) { listeners.push(fn); return () => listeners.splice(listeners.indexOf(fn), 1); },
@@ -82,21 +99,55 @@ App.Store = (function () {
     setSetup(newSetup) { setup = newSetup; selectedPropId = null; emit(); },
     touch() { setup.updatedAt = new Date().toISOString(); emit(); },
 
+    getScene() { return currentScene(); },
+    getScenes() { return setup.scenes; },
+    getActiveSceneId() { return setup.activeSceneId; },
+    selectScene(id) {
+      if (!setup.scenes.some(s => s.id === id) || id === setup.activeSceneId) return;
+      setup.activeSceneId = id;
+      selectedPropId = null;
+      emit();
+    },
+    addScene(name) {
+      const scene = App.factories.newScene(name);
+      setup.scenes.push(scene);
+      setup.activeSceneId = scene.id;
+      selectedPropId = null;
+      this.touch();
+      return scene;
+    },
+    renameScene(id, name) {
+      const s = setup.scenes.find(s => s.id === id);
+      if (!s) return;
+      s.name = name;
+      this.touch();
+    },
+    removeScene(id) {
+      if (setup.scenes.length <= 1) return; // a setup always keeps at least 1 scene
+      const idx = setup.scenes.findIndex(s => s.id === id);
+      if (idx === -1) return;
+      setup.scenes.splice(idx, 1);
+      if (setup.activeSceneId === id) setup.activeSceneId = setup.scenes[Math.max(0, idx - 1)].id;
+      selectedPropId = null;
+      this.touch();
+    },
+
     getSelectedPropId() { return selectedPropId; },
     selectProp(id) { selectedPropId = id; emit(); },
-    getSelectedProp() { return setup.props.find(p => p.id === selectedPropId) || null; },
+    getSelectedProp() { return currentScene().props.find(p => p.id === selectedPropId) || null; },
 
     getTool() { return tool; },
     setTool(t) { tool = t; emit(); },
 
-    addProp(prop) { setup.props.push(prop); selectedPropId = prop.id; this.touch(); },
+    addProp(prop) { currentScene().props.push(prop); selectedPropId = prop.id; this.touch(); },
     removeProp(id) {
-      setup.props = setup.props.filter(p => p.id !== id);
+      const scene = currentScene();
+      scene.props = scene.props.filter(p => p.id !== id);
       if (selectedPropId === id) selectedPropId = null;
       this.touch();
     },
     updateProp(id, patch) {
-      const p = setup.props.find(p => p.id === id);
+      const p = currentScene().props.find(p => p.id === id);
       if (!p) return;
       Object.assign(p, patch);
       this.touch();
@@ -109,19 +160,18 @@ App.Store = (function () {
       this.touch();
     },
 
-    setBackground(bg) { setup.background = bg; this.touch(); },
-    setFrameGrab(fg) { setup.frameGrab = fg; this.touch(); },
-    setView(patch) { Object.assign(setup.view, patch); emit(); },
+    setFrameGrab(fg) { currentScene().frameGrab = fg; this.touch(); },
+    setView(patch) { Object.assign(currentScene().view, patch); emit(); },
 
     updateMeasuredPoint(propId, pointKey, patch) {
-      const p = setup.props.find(p => p.id === propId);
+      const p = currentScene().props.find(p => p.id === propId);
       if (!p) return;
       if (!p.measuredPoints[pointKey]) p.measuredPoints[pointKey] = { distances: [null, null, null, null, null], solved: null };
       Object.assign(p.measuredPoints[pointKey], patch);
       this.touch();
     },
     clearMeasuredPoint(propId, pointKey) {
-      const p = setup.props.find(p => p.id === propId);
+      const p = currentScene().props.find(p => p.id === propId);
       if (!p) return;
       p.measuredPoints[pointKey] = null;
       this.touch();
@@ -131,7 +181,7 @@ App.Store = (function () {
     // solved (multilaterated) world position. 1 solved point -> translate only
     // (keeps current rotation). 2+ -> least-squares rotation + translation fit.
     solvePropTransform(propId) {
-      const p = setup.props.find(p => p.id === propId);
+      const p = currentScene().props.find(p => p.id === propId);
       if (!p) return null;
       const correspondences = [];
       App.PROP_POINTS.forEach(({ key }) => {
