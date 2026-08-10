@@ -78,6 +78,32 @@ window.App = window.App || {};
 
   function configReady(cfg) { return !!(cfg.token && cfg.owner && cfg.repo); }
 
+  // Read-modify-write the index with retry: two overlapping saves/refreshes
+  // (e.g. the auto-refresh on load racing a manual click, or Save's own
+  // index update overlapping a Refresh) can both read the same sha and then
+  // have the second write rejected with a 409 because the file moved under
+  // it. mutateFn receives the current array and returns the new one, or
+  // null to signal "nothing to change" (skips the write). Always resolves
+  // to the resulting array, whether or not a write happened.
+  async function updateIndex(cfg, mutateFn, message) {
+    const maxAttempts = 4;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const indexFile = await fetchJsonFile(cfg, INDEX_PATH);
+      const current = Array.isArray(indexFile.data) ? indexFile.data.slice() : [];
+      const next = mutateFn(current);
+      if (next === null) return current;
+      try {
+        await putJsonFile(cfg, INDEX_PATH, next, indexFile.sha, message);
+        return next;
+      } catch (err) {
+        const isConflict = /\(409\)/.test(err.message);
+        if (!isConflict || attempt === maxAttempts) throw err;
+        // Someone else updated the index between our read and write -- loop
+        // around and retry against the fresh version.
+      }
+    }
+  }
+
   async function saveToGitHub() {
     const cfg = readFields();
     if (!configReady(cfg)) {
@@ -98,11 +124,10 @@ window.App = window.App || {};
       await putJsonFile(cfg, path, setup, existing.sha, `Save "${setup.name}" — ${new Date().toISOString()}`);
 
       // Keep the index manifest in sync so the Load list stays accurate.
-      const indexFile = await fetchJsonFile(cfg, INDEX_PATH);
-      const index = Array.isArray(indexFile.data) ? indexFile.data : [];
-      const entry = { id: setup.id, name: setup.name, updatedAt: setup.updatedAt, sceneCount: setup.scenes.length };
-      const next = [entry, ...index.filter(e => e.id !== setup.id)];
-      await putJsonFile(cfg, INDEX_PATH, next, indexFile.sha, `Update setups index — ${setup.name}`);
+      await updateIndex(cfg, current => {
+        const entry = { id: setup.id, name: setup.name, updatedAt: setup.updatedAt, sceneCount: setup.scenes.length };
+        return [entry, ...current.filter(e => e.id !== setup.id)];
+      }, `Update setups index — ${setup.name}`);
 
       setStatus(`Saved to ${cfg.owner}/${cfg.repo}/${path}`);
       App.toast(`Setup saved to GitHub: ${path}`);
@@ -122,6 +147,8 @@ window.App = window.App || {};
     return res.json();
   }
 
+  let refreshInFlight = false;
+
   // Reads the index manifest, then reconciles it against what's actually in
   // the repo's setups/ folder -- picks up files saved before this Load
   // feature existed (or added outside the app) and repairs the index so
@@ -129,29 +156,38 @@ window.App = window.App || {};
   async function refreshLoadList(cfg) {
     cfg = cfg || readFields();
     const picker = dom.qs('#gh-load-picker');
-    if (!configReady(cfg)) return;
+    if (!configReady(cfg) || refreshInFlight) return;
+    refreshInFlight = true;
+    const btn = dom.qs('#btn-refresh-github-list');
+    btn.disabled = true;
+
     try {
       const indexFile = await fetchJsonFile(cfg, INDEX_PATH);
-      const entries = Array.isArray(indexFile.data) ? indexFile.data.slice() : [];
-      const knownIds = new Set(entries.map(e => e.id));
+      const knownIds = new Set((indexFile.data || []).map(e => e.id));
 
       const files = await listDirectory(cfg, 'setups');
       const orphanFiles = Array.isArray(files)
         ? files.filter(f => f.type === 'file' && f.name.endsWith('.json') && f.name !== 'index.json' && !knownIds.has(f.name.replace(/\.json$/, '')))
         : [];
 
+      const recovered = [];
       for (const f of orphanFiles) {
         try {
           const { data } = await fetchJsonFile(cfg, f.path);
           if (data && data.id) {
-            entries.push({ id: data.id, name: data.name, updatedAt: data.updatedAt, sceneCount: (data.scenes || []).length });
+            recovered.push({ id: data.id, name: data.name, updatedAt: data.updatedAt, sceneCount: (data.scenes || []).length });
           }
         } catch (e) { /* unreadable/corrupt file -- skip it */ }
       }
 
-      if (orphanFiles.length) {
-        await putJsonFile(cfg, INDEX_PATH, entries, indexFile.sha, `Repair setups index (recovered ${orphanFiles.length} untracked setup(s))`);
-        setStatus(`Found and indexed ${orphanFiles.length} previously-saved setup(s).`);
+      let entries = Array.isArray(indexFile.data) ? indexFile.data : [];
+      if (recovered.length) {
+        entries = await updateIndex(cfg, current => {
+          const ids = new Set(current.map(e => e.id));
+          const toAdd = recovered.filter(e => !ids.has(e.id));
+          return toAdd.length ? [...current, ...toAdd] : null;
+        }, `Repair setups index (recovered ${recovered.length} untracked setup(s))`);
+        setStatus(`Found and indexed ${recovered.length} previously-saved setup(s).`);
       }
 
       entries.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
@@ -163,6 +199,9 @@ window.App = window.App || {};
       });
     } catch (err) {
       setStatus('Could not refresh list: ' + err.message, true);
+    } finally {
+      refreshInFlight = false;
+      btn.disabled = false;
     }
   }
 
