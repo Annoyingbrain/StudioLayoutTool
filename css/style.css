@@ -182,6 +182,13 @@ label input[type="color"] { padding: 2px; height: 30px; }
 #measurement-result .err-warn { color: #e0b95a; }
 #measurement-result .err-bad { color: var(--danger); }
 
+.subheading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 12px 0 4px; border-top: 1px solid var(--border); padding-top: 10px; }
+
+#current-distances { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 12px; }
+.dist-row { display: flex; justify-content: space-between; padding: 3px 4px; border-radius: 4px; }
+.dist-row .dr-label { color: var(--muted); }
+.dist-row .dr-value { font-variant-numeric: tabular-nums; }
+
 #points-status { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 11px; }
 .point-status-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 4px; cursor: pointer; }
 .point-status-row:hover { background: rgba(255,255,255,0.04); }

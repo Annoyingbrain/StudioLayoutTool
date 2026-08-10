@@ -85,6 +85,21 @@ window.App = window.App || {};
     dom.qs('#btn-solve-object').disabled = solvedCount === 0;
   }
 
+  function renderCurrentDistances() {
+    const prop = currentProp();
+    const setup = App.Store.getSetup();
+    const container = dom.qs('#current-distances');
+    dom.clear(container);
+    const worldPt = App.geometry.pointWorldPosition(prop, selectedPointKey);
+    setup.referencePoints.forEach(rp => {
+      const d = App.geometry.distance(worldPt.x, worldPt.y, rp.x, rp.y);
+      container.appendChild(dom.el('div', { class: 'dist-row' }, [
+        dom.el('span', { class: 'dr-label', text: rp.label }),
+        dom.el('span', { class: 'dr-value', text: `${d.toFixed(3)} m` })
+      ]));
+    });
+  }
+
   function render() {
     const prop = currentProp();
     const empty = dom.qs('#measurement-empty'), fields = dom.qs('#measurement-fields');
@@ -94,6 +109,7 @@ window.App = window.App || {};
     renderPointSelector();
     renderDistanceInputs();
     renderPointsStatus();
+    renderCurrentDistances();
   }
 
   function readDistances() {

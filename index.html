@@ -112,7 +112,7 @@
         </div>
       </section>
 
-      <section class="panel" id="refpoints-panel">
+      <section class="panel hidden" id="refpoints-panel">
         <h3>Reference Points (studio survey)</h3>
         <div id="refpoints-list"></div>
         <button id="btn-save-default-refs">Save as studio default</button>
@@ -130,6 +130,10 @@
           <div id="points-status"></div>
           <button id="btn-solve-object" disabled>Solve Object Position &amp; Rotation</button>
           <p class="hint">Measure at least 2 points (e.g. two corners, or a corner + center) to solve both position and rotation. A single point can only reposition the prop — its current rotation is kept.</p>
+
+          <div class="subheading">Current Distances</div>
+          <div id="current-distances"></div>
+          <p class="hint">Straight-line distance from the selected point's current on-canvas position to each reference point — for cross-checking against a tape measure, even for points you haven't individually measured.</p>
         </div>
       </section>
 
