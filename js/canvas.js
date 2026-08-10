@@ -198,12 +198,13 @@ window.App = window.App || {};
     const view = scene.view;
     const selectedId = App.Store.getSelectedPropId();
 
+    const referencePoints = setup.referencePoints || [];
     if (App.dom.qs('#chk-grid').checked) {
-      const centerPoint = setup.referencePoints.find(rp => rp.label === 'Center');
+      const centerPoint = referencePoints.find(rp => rp.label === 'Center');
       drawGrid(view, w, h, centerPoint);
     }
     if (App.dom.qs('#chk-studio-sketch').checked) drawStudioSketch(view);
-    drawReferencePoints(view, setup.referencePoints);
+    drawReferencePoints(view, referencePoints);
     scene.props.forEach(p => drawProp(view, p, p.id === selectedId));
 
     // Each scene has its own pan/zoom; keep the px/m readout in sync when

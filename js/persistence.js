@@ -9,8 +9,15 @@ const LS_DEFAULT_REFS_KEY = 'vps_default_refpoints';
 
 // Older saved/exported setups (before multi-scene support) kept props,
 // frameGrab and view directly on the setup instead of inside a scenes array.
-// Wrap them into a single scene so old files/local saves still load.
+// Wrap them into a single scene so old files/local saves still load. Also
+// guarantees referencePoints exists -- checked unconditionally, not just on
+// the old-format path, so a setup that's otherwise current-format but
+// missing/corrupt reference points (e.g. a partial/hand-edited save) doesn't
+// crash the canvas render, which expects the array to always be there.
 function migrateSetup(setup) {
+  if (!Array.isArray(setup.referencePoints) || !setup.referencePoints.length) {
+    setup.referencePoints = App.factories.defaultReferencePoints();
+  }
   if (Array.isArray(setup.scenes) && setup.scenes.length) return setup;
   const scene = App.factories.newScene('Position 1');
   scene.props = setup.props || [];
