@@ -1,0 +1,409 @@
+// The 2D top-down studio canvas: grid, background reference image, reference
+// points, props (cubes/rectangles) with drag-move, drag-rotate and drag-resize.
+window.App = window.App || {};
+
+(function () {
+  const geo = App.geometry;
+  const HANDLE_R = 6;
+  const ROT_HANDLE_R = 7;
+
+  let canvas, ctx, wrap;
+  let dragState = null;
+  let spaceDown = false;
+  let bgImageCache = { url: null, img: null };
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function resizeCanvasToDisplaySize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function getView() { return App.Store.getSetup().view; }
+
+  function mouseWorld(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const sx = evt.clientX - rect.left, sy = evt.clientY - rect.top;
+    return { screen: { x: sx, y: sy }, world: geo.screenToWorld(getView(), sx, sy) };
+  }
+
+  function drawGrid(view, w, h) {
+    ctx.save();
+    ctx.strokeStyle = '#2b2f38';
+    ctx.lineWidth = 1;
+    const topLeft = geo.screenToWorld(view, 0, 0);
+    const bottomRight = geo.screenToWorld(view, w, h);
+    const minX = Math.floor(Math.min(topLeft.x, bottomRight.x)) - 1;
+    const maxX = Math.ceil(Math.max(topLeft.x, bottomRight.x)) + 1;
+    const minY = Math.floor(Math.min(topLeft.y, bottomRight.y)) - 1;
+    const maxY = Math.ceil(Math.max(topLeft.y, bottomRight.y)) + 1;
+
+    for (let x = minX; x <= maxX; x++) {
+      const major = x % 5 === 0;
+      ctx.strokeStyle = major ? '#3a4150' : '#262b34';
+      ctx.lineWidth = major ? 1.2 : 0.6;
+      const a = geo.worldToScreen(view, x, minY), b = geo.worldToScreen(view, x, maxY);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (let y = minY; y <= maxY; y++) {
+      const major = y % 5 === 0;
+      ctx.strokeStyle = major ? '#3a4150' : '#262b34';
+      ctx.lineWidth = major ? 1.2 : 0.6;
+      const a = geo.worldToScreen(view, minX, y), b = geo.worldToScreen(view, maxX, y);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+
+    // World origin axes
+    ctx.strokeStyle = '#54607a';
+    ctx.lineWidth = 1.5;
+    const ox = geo.worldToScreen(view, minX, 0), ox2 = geo.worldToScreen(view, maxX, 0);
+    ctx.beginPath(); ctx.moveTo(ox.x, ox.y); ctx.lineTo(ox2.x, ox2.y); ctx.stroke();
+    const oy = geo.worldToScreen(view, 0, minY), oy2 = geo.worldToScreen(view, 0, maxY);
+    ctx.beginPath(); ctx.moveTo(oy.x, oy.y); ctx.lineTo(oy2.x, oy2.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBackground(view, background) {
+    if (!background) return;
+    if (bgImageCache.url !== background.imageDataUrl) {
+      const img = new Image();
+      img.src = background.imageDataUrl;
+      bgImageCache = { url: background.imageDataUrl, img };
+    }
+    const img = bgImageCache.img;
+    if (!img.complete || !img.naturalWidth) return;
+    const widthM = background.pxWidth / background.pxPerMeter;
+    const heightM = background.pxHeight / background.pxPerMeter;
+    const topLeft = geo.worldToScreen(view, background.originWorld.x, background.originWorld.y);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(img, topLeft.x, topLeft.y, widthM * view.scale, heightM * view.scale);
+    ctx.restore();
+  }
+
+  // Fixed studio floor-plan sketch (curved LED wall + LED floor), baked once
+  // from the studio's mesh export -- see js/studioSketch.js. Always on, same
+  // for every setup, not user-editable. The room_shell outline is skipped --
+  // just the LED wall/floor reference is shown.
+  function drawStudioSketch(view) {
+    const sketch = window.App.studioSketch;
+    if (!sketch) return;
+    ctx.save();
+    ctx.lineWidth = 1;
+    sketch.objects.filter(obj => obj.name !== 'room_shell').forEach(obj => {
+      ctx.strokeStyle = obj.color;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      obj.segments.forEach(([a, b]) => {
+        const sa = geo.worldToScreen(view, a[0], a[1]);
+        const sb = geo.worldToScreen(view, b[0], b[1]);
+        ctx.moveTo(sa.x, sa.y);
+        ctx.lineTo(sb.x, sb.y);
+      });
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function drawReferencePoints(view, points) {
+    points.forEach((rp, i) => {
+      const s = geo.worldToScreen(view, rp.x, rp.y);
+      ctx.save();
+      ctx.fillStyle = '#e0b95a';
+      ctx.strokeStyle = '#3a2f10';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y - 7); ctx.lineTo(s.x + 7, s.y); ctx.lineTo(s.x, s.y + 7); ctx.lineTo(s.x - 7, s.y);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#e6e8eb';
+      ctx.font = '11px Segoe UI, Arial';
+      ctx.fillText(rp.label, s.x + 9, s.y - 8);
+      ctx.restore();
+    });
+  }
+
+  function drawProp(view, prop, selected) {
+    const corners = geo.propCorners(prop).map(p => geo.worldToScreen(view, p.x, p.y));
+    const center = geo.worldToScreen(view, prop.x, prop.y);
+
+    ctx.save();
+    ctx.beginPath();
+    corners.forEach((c, i) => i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y));
+    ctx.closePath();
+    ctx.fillStyle = prop.color + '55';
+    ctx.fill();
+    ctx.strokeStyle = selected ? '#4da6ff' : prop.color;
+    ctx.lineWidth = selected ? 2.5 : 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#0d0f12';
+    ctx.font = 'bold 11px Segoe UI, Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(prop.name, center.x, center.y);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+
+    if (prop.positionSource === 'measured') {
+      ctx.save();
+      ctx.fillStyle = '#6fd08c';
+      ctx.beginPath();
+      ctx.arc(corners[1].x, corners[1].y, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (selected) {
+      ctx.save();
+      corners.forEach(c => {
+        ctx.fillStyle = '#4da6ff';
+        ctx.strokeStyle = '#0d0f12';
+        ctx.beginPath();
+        ctx.rect(c.x - HANDLE_R / 2, c.y - HANDLE_R / 2, HANDLE_R, HANDLE_R);
+        ctx.fill(); ctx.stroke();
+      });
+      const rotHandleWorld = geo.rotationHandlePos(prop);
+      const rotHandle = geo.worldToScreen(view, rotHandleWorld.x, rotHandleWorld.y);
+      ctx.strokeStyle = '#4da6ff';
+      ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(rotHandle.x, rotHandle.y); ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, ROT_HANDLE_R, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#0d0f12'; ctx.stroke();
+      ctx.restore();
+
+      if (App.measurement) {
+        const pointKey = App.measurement.getSelectedPointKey();
+        const worldPt = geo.pointWorldPosition(prop, pointKey);
+        const s = geo.worldToScreen(view, worldPt.x, worldPt.y);
+        ctx.save();
+        ctx.strokeStyle = '#ff5ac8';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 9, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(s.x, s.y, 2, 0, Math.PI * 2); ctx.fillStyle = '#ff5ac8'; ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function render() {
+    resizeCanvasToDisplaySize();
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+    const setup = App.Store.getSetup();
+    const view = setup.view;
+    const selectedId = App.Store.getSelectedPropId();
+
+    if (App.dom.qs('#chk-grid').checked) drawGrid(view, w, h);
+    drawBackground(view, setup.background);
+    if (App.dom.qs('#chk-studio-sketch').checked) drawStudioSketch(view);
+    drawReferencePoints(view, setup.referencePoints);
+    setup.props.forEach(p => drawProp(view, p, p.id === selectedId));
+
+    if (App.calibration && App.calibration.isActive()) {
+      App.calibration.drawPickedPoints(ctx, view);
+    }
+
+    updateHint();
+  }
+
+  function updateHint() {
+    const hint = App.dom.qs('#canvas-hint');
+    const tool = App.Store.getTool();
+    if (App.calibration && App.calibration.isActive()) {
+      hint.textContent = App.calibration.hintText();
+    } else if (tool === 'add-prop') {
+      hint.textContent = 'Click on the canvas to place the prop.';
+    } else {
+      hint.textContent = 'Drag to move · click a corner to select it for measuring · top handle rotates · wheel to zoom · middle-drag or space+drag to pan';
+    }
+  }
+
+  function hitTestProp(setup, worldPt) {
+    for (let i = setup.props.length - 1; i >= 0; i--) {
+      if (geo.pointInProp(worldPt.x, worldPt.y, setup.props[i])) return setup.props[i];
+    }
+    return null;
+  }
+
+  function hitTestHandles(view, prop, screenPt) {
+    const corners = geo.propCorners(prop).map(p => geo.worldToScreen(view, p.x, p.y));
+    for (let i = 0; i < corners.length; i++) {
+      if (geo.distance(screenPt.x, screenPt.y, corners[i].x, corners[i].y) <= HANDLE_R + 3) {
+        return { kind: 'select-point', cornerIndex: i };
+      }
+    }
+    const rotWorld = geo.rotationHandlePos(prop);
+    const rotScreen = geo.worldToScreen(view, rotWorld.x, rotWorld.y);
+    if (geo.distance(screenPt.x, screenPt.y, rotScreen.x, rotScreen.y) <= ROT_HANDLE_R + 3) {
+      return { kind: 'rotate' };
+    }
+    return null;
+  }
+
+  function onPointerDown(evt) {
+    const { screen, world } = mouseWorld(evt);
+    const setup = App.Store.getSetup();
+
+    if (App.calibration && App.calibration.isActive()) {
+      App.calibration.pick(screen, world);
+      render();
+      return;
+    }
+
+    if (evt.button === 1 || (evt.button === 0 && spaceDown)) {
+      dragState = { kind: 'pan', startScreen: screen, startOrigin: { x: setup.view.originX, y: setup.view.originY } };
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
+
+    const tool = App.Store.getTool();
+    if (evt.button === 0 && tool === 'add-prop') {
+      const prop = App.factories.newProp(round3(world.x), round3(world.y), setup.props.length);
+      App.Store.addProp(prop);
+      App.Store.setTool('select');
+      return;
+    }
+
+    if (evt.button !== 0) return;
+
+    const selected = App.Store.getSelectedProp();
+    if (selected) {
+      const handle = hitTestHandles(setup.view, selected, screen);
+      if (handle && handle.kind === 'rotate') {
+        dragState = { kind: 'rotate', propId: selected.id, center: { x: selected.x, y: selected.y } };
+        return;
+      }
+      if (handle && handle.kind === 'select-point') {
+        if (App.measurement) App.measurement.selectPoint('corner' + handle.cornerIndex);
+        return;
+      }
+    }
+
+    const hit = hitTestProp(setup, world);
+    if (hit) {
+      App.Store.selectProp(hit.id);
+      dragState = { kind: 'move', propId: hit.id, startWorld: world, startProp: { x: hit.x, y: hit.y } };
+    } else {
+      App.Store.selectProp(null);
+    }
+  }
+
+  function round3(v) { return Math.round(v * 1000) / 1000; }
+
+  function onPointerMove(evt) {
+    if (!dragState) {
+      if (App.calibration && App.calibration.isActive()) render();
+      return;
+    }
+    const { screen, world } = mouseWorld(evt);
+    const setup = App.Store.getSetup();
+
+    if (dragState.kind === 'pan') {
+      const dx = screen.x - dragState.startScreen.x, dy = screen.y - dragState.startScreen.y;
+      App.Store.setView({ originX: dragState.startOrigin.x + dx, originY: dragState.startOrigin.y + dy });
+      return;
+    }
+
+    if (dragState.kind === 'move') {
+      const dx = world.x - dragState.startWorld.x, dy = world.y - dragState.startWorld.y;
+      App.Store.updateProp(dragState.propId, {
+        x: round3(dragState.startProp.x + dx),
+        y: round3(dragState.startProp.y + dy),
+        positionSource: 'manual'
+      });
+      return;
+    }
+
+    if (dragState.kind === 'rotate') {
+      const dx = world.x - dragState.center.x, dy = world.y - dragState.center.y;
+      let deg = Math.atan2(dy, dx) * 180 / Math.PI - 90;
+      App.Store.updateProp(dragState.propId, { rotationDeg: Math.round(deg * 10) / 10, positionSource: 'manual' });
+      return;
+    }
+
+  }
+
+  function onPointerUp() {
+    if (dragState && dragState.kind === 'pan') canvas.style.cursor = 'default';
+    dragState = null;
+  }
+
+  function onWheel(evt) {
+    evt.preventDefault();
+    const { screen } = mouseWorld(evt);
+    const view = getView();
+    const worldPt = geo.screenToWorld(view, screen.x, screen.y);
+    const factor = evt.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newScale = clamp(view.scale * factor, 4, 400);
+    const newOriginX = screen.x - worldPt.x * newScale;
+    const newOriginY = screen.y + worldPt.y * newScale;
+    App.Store.setView({ scale: newScale, originX: newOriginX, originY: newOriginY });
+    App.dom.qs('#view-scale').value = Math.round(newScale);
+  }
+
+  function fitViewToBounds(minX, maxX, minY, maxY, pad) {
+    pad = pad == null ? 40 : pad;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    const worldW = Math.max(0.5, maxX - minX), worldH = Math.max(0.5, maxY - minY);
+    let scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
+    scale = clamp(scale, 4, 400);
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    App.Store.setView({ scale, originX: w / 2 - cx * scale, originY: h / 2 + cy * scale });
+    const scaleInput = App.dom.qs('#view-scale');
+    if (scaleInput) scaleInput.value = Math.round(scale);
+  }
+
+  App.canvas = {
+    init() {
+      canvas = App.dom.qs('#studio-canvas');
+      wrap = App.dom.qs('#canvas-wrap');
+      ctx = canvas.getContext('2d');
+
+      canvas.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+      canvas.addEventListener('wheel', onWheel, { passive: false });
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+      window.addEventListener('keydown', e => { if (e.code === 'Space') { spaceDown = true; if (canvas) canvas.style.cursor = 'grab'; } });
+      window.addEventListener('keyup', e => { if (e.code === 'Space') { spaceDown = false; if (canvas) canvas.style.cursor = 'default'; } });
+
+      window.addEventListener('resize', render);
+
+      App.Store.subscribe(render);
+      render();
+    },
+    render,
+    getCanvasElement() { return canvas; },
+    fitToStudioSketch() {
+      const sketch = window.App.studioSketch;
+      if (!sketch) return;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      sketch.objects.forEach(obj => obj.segments.forEach(([a, b]) => {
+        [a, b].forEach(([x, y]) => {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        });
+      }));
+      if (isFinite(minX)) fitViewToBounds(minX, maxX, minY, maxY);
+    },
+    fitToReferencePoints() {
+      const points = App.Store.getSetup().referencePoints;
+      if (!points || !points.length) return;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      points.forEach(p => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      });
+      if (isFinite(minX)) fitViewToBounds(minX, maxX, minY, maxY, 80);
+    }
+  };
+})();

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio Layout Tool</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app-shell">
+
+  <header id="toolbar">
+    <div class="toolbar-group">
+      <strong class="brand">Studio Layout Tool</strong>
+      <input id="setup-name" type="text" value="Untitled Setup" spellcheck="false">
+    </div>
+    <div class="toolbar-group">
+      <button id="btn-new">New</button>
+      <button id="btn-save-local">Save</button>
+      <select id="setup-picker"><option value="">Load setup…</option></select>
+      <button id="btn-export-json">Export .json</button>
+      <label class="file-btn">Import .json<input id="import-json" type="file" accept="application/json"></label>
+    </div>
+    <div class="toolbar-group">
+      <button id="btn-export-csv">Export CSV (Disguise)</button>
+      <button id="btn-report">Report / Print</button>
+    </div>
+  </header>
+
+  <div id="main-body">
+
+    <aside id="left-panel">
+
+      <section class="panel">
+        <h3>Tools</h3>
+        <div class="tool-row">
+          <button id="tool-select" class="tool-btn active" data-tool="select">Select / Move</button>
+          <button id="tool-add-prop" class="tool-btn" data-tool="add-prop">+ Add Prop</button>
+        </div>
+        <div class="tool-row">
+          <label class="chk"><input type="checkbox" id="chk-grid" checked> Show grid</label>
+          <label class="chk"><input type="checkbox" id="chk-studio-sketch" checked> Show studio sketch</label>
+          <label class="chk">px/m: <input type="number" id="view-scale" value="40" min="4" max="400" step="1"></label>
+        </div>
+      </section>
+
+      <section class="panel" id="prop-list-panel">
+        <h3>Props <span id="prop-count" class="muted"></span></h3>
+        <div id="prop-list"></div>
+      </section>
+
+      <section class="panel" id="background-panel">
+        <h3>Background / Studio Reference</h3>
+        <label class="file-btn block">Import reference image<input id="import-bg" type="file" accept="image/*"></label>
+        <div id="bg-info" class="muted small"></div>
+        <button id="btn-calibrate" disabled>Calibrate scale (click 2 pts)</button>
+        <button id="btn-clear-bg" disabled>Remove background</button>
+        <p class="hint">Drop a top-down render/photo of the studio here, then calibrate it against a known real-world distance. The studio's fixed floor-plan sketch (room shell + curved LED wall) is always drawn underneath as a reference.</p>
+      </section>
+
+      <section class="panel" id="framegrab-panel">
+        <h3>Frame Grab Reference</h3>
+        <label class="file-btn block">Import frame grab<input id="import-framegrab" type="file" accept="image/*"></label>
+        <img id="framegrab-thumb" class="thumb hidden" alt="frame grab">
+        <textarea id="framegrab-caption" placeholder="Caption / camera notes…" rows="2"></textarea>
+      </section>
+
+    </aside>
+
+    <main id="canvas-wrap">
+      <canvas id="studio-canvas"></canvas>
+      <div id="canvas-hint" class="canvas-hint"></div>
+    </main>
+
+    <aside id="right-panel">
+
+      <section class="panel" id="inspector-panel">
+        <h3>Prop Inspector</h3>
+        <div id="inspector-empty" class="muted small">Select a prop to edit its properties.</div>
+        <div id="inspector-fields" class="hidden">
+          <label>Name <input id="insp-name" type="text"></label>
+          <label>Size units
+            <select id="insp-size-unit">
+              <option value="m">meters (m)</option>
+              <option value="cm">centimeters (cm)</option>
+            </select>
+          </label>
+          <div class="two-col">
+            <label>Length <input id="insp-width" type="number" step="0.01" min="0.01"><span class="size-readout" id="insp-width-readout"></span></label>
+            <label>Width <input id="insp-depth" type="number" step="0.01" min="0.01"><span class="size-readout" id="insp-depth-readout"></span></label>
+          </div>
+          <label>Height (info only) <input id="insp-height" type="number" step="0.01" min="0"><span class="size-readout" id="insp-height-readout"></span></label>
+          <div class="two-col">
+            <label>X (m) <input id="insp-x" type="number" step="0.001"></label>
+            <label>Y (m) <input id="insp-y" type="number" step="0.001"></label>
+          </div>
+          <label>Rotation (deg) <input id="insp-rot" type="number" step="1"></label>
+          <label>Color <input id="insp-color" type="color" value="#4da6ff"></label>
+          <label>Notes <textarea id="insp-notes" rows="2"></textarea></label>
+          <div class="position-source small muted" id="insp-position-source"></div>
+          <button id="btn-delete-prop" class="danger">Delete Prop</button>
+        </div>
+      </section>
+
+      <section class="panel" id="refpoints-panel">
+        <h3>Reference Points (studio survey)</h3>
+        <div id="refpoints-list"></div>
+        <button id="btn-save-default-refs">Save as studio default</button>
+        <p class="hint">Enter the known real-world X,Y (meters) of each of the 5 fixed reference points, measured once for the studio.</p>
+      </section>
+
+      <section class="panel" id="measurement-panel">
+        <h3>Measure Selected Prop</h3>
+        <div id="measurement-empty" class="muted small">Select a prop to enter measured distances.</div>
+        <div id="measurement-fields" class="hidden">
+          <div id="point-selector" class="tool-row"></div>
+          <div id="measurement-inputs"></div>
+          <button id="btn-compute-position">Compute This Point</button>
+          <div id="measurement-result" class="small"></div>
+          <div id="points-status"></div>
+          <button id="btn-solve-object" disabled>Solve Object Position &amp; Rotation</button>
+          <p class="hint">Measure at least 2 points (e.g. two corners, or a corner + center) to solve both position and rotation. A single point can only reposition the prop — its current rotation is kept.</p>
+        </div>
+      </section>
+
+    </aside>
+  </div>
+</div>
+
+<div id="report-view" class="hidden"></div>
+
+<script src="js/utils/dom.js"></script>
+<script src="js/utils/id.js"></script>
+<script src="js/utils/geometry.js"></script>
+<script src="js/multilateration.js"></script>
+<script src="js/rigidFit.js"></script>
+<script src="js/studioSketch.js"></script>
+<script src="js/state.js"></script>
+<script src="js/persistence.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/csvExport.js"></script>
+<script src="js/reportExport.js"></script>
+<script src="js/ui/sidebar.js"></script>
+<script src="js/ui/refpoints.js"></script>
+<script src="js/ui/measurement.js"></script>
+<script src="js/ui/calibration.js"></script>
+<script src="js/ui/toolbar.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
