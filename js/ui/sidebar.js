@@ -71,7 +71,10 @@ window.App = window.App || {};
     if (!prop) { empty.classList.remove('hidden'); fields.classList.add('hidden'); return; }
     empty.classList.add('hidden'); fields.classList.remove('hidden');
 
+    const isCircle = prop.shape === 'circle';
+
     setVal('#insp-name', prop.name);
+    setVal('#insp-shape', prop.shape || 'rect');
     dom.qs('#insp-size-unit').value = sizeUnit;
     setVal('#insp-width', roundDisplay(fromMeters(prop.widthM)));
     setVal('#insp-depth', roundDisplay(fromMeters(prop.depthM)));
@@ -84,6 +87,10 @@ window.App = window.App || {};
     setVal('#insp-rot', prop.rotationDeg);
     setVal('#insp-color', prop.color);
     setVal('#insp-notes', prop.notes);
+
+    dom.qs('#insp-width-label-text').textContent = isCircle ? 'Diameter' : 'Length';
+    dom.qs('#insp-depth-field').classList.toggle('hidden', isCircle);
+    dom.qs('#insp-rot-field').classList.toggle('hidden', isCircle);
 
     const src = dom.qs('#insp-position-source');
     if (prop.positionSource === 'measured' && prop.lastSolve) {
@@ -109,7 +116,17 @@ window.App = window.App || {};
     };
     const parseSize = v => toMeters(parseFloat(v));
     bind('#insp-name', 'name');
-    bind('#insp-width', 'widthM', parseSize);
+    // A circle's "width" is its diameter -- depthM is kept equal to it so the
+    // rest of the codebase (bounding box, CSV export) can keep treating every
+    // prop as having a widthM/depthM footprint without a shape check.
+    dom.qs('#insp-width').addEventListener('input', e => {
+      const prop = App.Store.getSelectedProp();
+      if (!prop) return;
+      const v = parseSize(e.target.value);
+      const patch = { widthM: v, positionSource: 'manual' };
+      if (prop.shape === 'circle') patch.depthM = v;
+      App.Store.updateProp(prop.id, patch);
+    });
     bind('#insp-depth', 'depthM', parseSize);
     bind('#insp-height', 'heightM', parseSize);
     bind('#insp-x', 'x', parseFloat);
@@ -117,6 +134,15 @@ window.App = window.App || {};
     bind('#insp-rot', 'rotationDeg', parseFloat);
     bind('#insp-color', 'color');
     bind('#insp-notes', 'notes');
+
+    dom.qs('#insp-shape').addEventListener('change', e => {
+      const prop = App.Store.getSelectedProp();
+      if (!prop) return;
+      const shape = e.target.value;
+      const patch = { shape, positionSource: 'manual' };
+      if (shape === 'circle') patch.depthM = prop.widthM;
+      App.Store.updateProp(prop.id, patch);
+    });
 
     dom.qs('#insp-size-unit').addEventListener('change', e => {
       sizeUnit = e.target.value;

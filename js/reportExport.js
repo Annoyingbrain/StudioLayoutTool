@@ -56,13 +56,19 @@ App.reportExport = (function () {
   }
 
   function drawProp(ctx, view, prop) {
-    const corners = App.geometry.propCorners(prop).map(p => App.geometry.worldToScreen(view, p.x, p.y));
+    const isCircle = prop.shape === 'circle';
     const center = App.geometry.worldToScreen(view, prop.x, prop.y);
+    const corners = isCircle ? null : App.geometry.propCorners(prop).map(p => App.geometry.worldToScreen(view, p.x, p.y));
+    const radiusPx = isCircle ? App.geometry.propRadius(prop) * view.scale : 0;
 
     ctx.save();
     ctx.beginPath();
-    corners.forEach((c, i) => i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y));
-    ctx.closePath();
+    if (isCircle) {
+      ctx.arc(center.x, center.y, radiusPx, 0, Math.PI * 2);
+    } else {
+      corners.forEach((c, i) => i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y));
+      ctx.closePath();
+    }
     ctx.fillStyle = prop.color + '55';
     ctx.fill();
     ctx.strokeStyle = prop.color;
@@ -71,7 +77,7 @@ App.reportExport = (function () {
     ctx.restore();
 
     // Name label above the box rather than centered inside it (clearer on print).
-    const topY = Math.min(...corners.map(c => c.y));
+    const topY = isCircle ? center.y - radiusPx : Math.min(...corners.map(c => c.y));
     ctx.save();
     ctx.fillStyle = '#111';
     ctx.font = 'bold 13px Segoe UI, Arial';
@@ -79,6 +85,8 @@ App.reportExport = (function () {
     ctx.textBaseline = 'bottom';
     ctx.fillText(prop.name, center.x, topY - 6);
     ctx.restore();
+
+    if (isCircle) return;
 
     // Corner labels (1-4), matching the "Corner 1"..."Corner 4" point names
     // used in the Props distance table below.
@@ -111,7 +119,7 @@ App.reportExport = (function () {
     const wall = sketch && sketch.objects.find(o => o.name === 'led_wall_curve');
     if (wall) wall.segments.forEach(([a, b]) => { expand(a[0], a[1]); expand(b[0], b[1]); });
     setup.referencePoints.forEach(rp => expand(rp.x, rp.y));
-    scene.props.forEach(p => App.geometry.propCorners(p).forEach(c => expand(c.x, c.y)));
+    scene.props.forEach(p => App.geometry.propExtentPoints(p).forEach(c => expand(c.x, c.y)));
     if (!isFinite(minX)) { minX = -1; maxX = 1; minY = -1; maxY = 1; }
 
     const view = computeView(minX, maxX, minY, maxY, 70);
@@ -126,7 +134,7 @@ App.reportExport = (function () {
   function buildPropsDistanceRows(setup, scene) {
     let rows = '';
     scene.props.forEach(p => {
-      App.PROP_POINTS.forEach(({ key, label }) => {
+      App.propPointsFor(p).forEach(({ key, label }) => {
         const worldPt = App.geometry.pointWorldPosition(p, key);
         const cells = setup.referencePoints
           .map(rp => `<td>${App.geometry.distance(worldPt.x, worldPt.y, rp.x, rp.y).toFixed(3)}</td>`)

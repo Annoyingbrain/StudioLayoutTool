@@ -108,6 +108,12 @@
         <div id="inspector-empty" class="muted small">Select a prop to edit its properties.</div>
         <div id="inspector-fields" class="hidden">
           <label>Name <input id="insp-name" type="text"></label>
+          <label>Shape
+            <select id="insp-shape">
+              <option value="rect">Rectangular</option>
+              <option value="circle">Circular</option>
+            </select>
+          </label>
           <label>Size units
             <select id="insp-size-unit">
               <option value="m">meters (m)</option>
@@ -115,15 +121,15 @@
             </select>
           </label>
           <div class="two-col">
-            <label>Length <input id="insp-width" type="number" step="0.01" min="0.01"><span class="size-readout" id="insp-width-readout"></span></label>
-            <label>Width <input id="insp-depth" type="number" step="0.01" min="0.01"><span class="size-readout" id="insp-depth-readout"></span></label>
+            <label><span id="insp-width-label-text">Length</span> <input id="insp-width" type="number" step="0.01" min="0.01"><span class="size-readout" id="insp-width-readout"></span></label>
+            <label id="insp-depth-field">Width <input id="insp-depth" type="number" step="0.01" min="0.01"><span class="size-readout" id="insp-depth-readout"></span></label>
           </div>
           <label>Height (info only) <input id="insp-height" type="number" step="0.01" min="0"><span class="size-readout" id="insp-height-readout"></span></label>
           <div class="two-col">
             <label>X (m) <input id="insp-x" type="number" step="0.001"></label>
             <label>Y (m) <input id="insp-y" type="number" step="0.001"></label>
           </div>
-          <label>Rotation (deg) <input id="insp-rot" type="number" step="1"></label>
+          <label id="insp-rot-field">Rotation (deg) <input id="insp-rot" type="number" step="1"></label>
           <label>Color <input id="insp-color" type="color" value="#4da6ff"></label>
           <label>Notes <textarea id="insp-notes" rows="2"></textarea></label>
           <div class="position-source small muted" id="insp-position-source"></div>

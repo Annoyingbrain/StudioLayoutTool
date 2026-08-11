@@ -1,5 +1,5 @@
-// The 2D top-down studio canvas: grid, reference points, props (cubes/rectangles)
-// with drag-move, drag-rotate and drag-resize.
+// The 2D top-down studio canvas: grid, reference points, props (rectangles or
+// circles) with drag-move, drag-rotate and drag-resize.
 window.App = window.App || {};
 
 (function () {
@@ -126,13 +126,22 @@ window.App = window.App || {};
   }
 
   function drawProp(view, prop, selected) {
-    const corners = geo.propCorners(prop).map(p => geo.worldToScreen(view, p.x, p.y));
+    const isCircle = prop.shape === 'circle';
     const center = geo.worldToScreen(view, prop.x, prop.y);
+    const corners = isCircle ? null : geo.propCorners(prop).map(p => geo.worldToScreen(view, p.x, p.y));
+    const radiusPx = isCircle ? geo.propRadius(prop) * view.scale : 0;
+    // Where the "measured" indicator dot and the name label anchor -- a
+    // corner for a rectangle, the top of the circle for a circle.
+    const markerPt = isCircle ? { x: center.x, y: center.y - radiusPx } : corners[1];
 
     ctx.save();
     ctx.beginPath();
-    corners.forEach((c, i) => i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y));
-    ctx.closePath();
+    if (isCircle) {
+      ctx.arc(center.x, center.y, radiusPx, 0, Math.PI * 2);
+    } else {
+      corners.forEach((c, i) => i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y));
+      ctx.closePath();
+    }
     ctx.fillStyle = prop.color + '55';
     ctx.fill();
     ctx.strokeStyle = selected ? '#4da6ff' : prop.color;
@@ -152,27 +161,29 @@ window.App = window.App || {};
       ctx.save();
       ctx.fillStyle = '#6fd08c';
       ctx.beginPath();
-      ctx.arc(corners[1].x, corners[1].y, 4, 0, Math.PI * 2);
+      ctx.arc(markerPt.x, markerPt.y, 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
     if (selected) {
       ctx.save();
-      corners.forEach(c => {
-        ctx.fillStyle = '#4da6ff';
-        ctx.strokeStyle = '#0d0f12';
-        ctx.beginPath();
-        ctx.rect(c.x - HANDLE_R / 2, c.y - HANDLE_R / 2, HANDLE_R, HANDLE_R);
-        ctx.fill(); ctx.stroke();
-      });
-      const rotHandleWorld = geo.rotationHandlePos(prop);
-      const rotHandle = geo.worldToScreen(view, rotHandleWorld.x, rotHandleWorld.y);
-      ctx.strokeStyle = '#4da6ff';
-      ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(rotHandle.x, rotHandle.y); ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, ROT_HANDLE_R, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#0d0f12'; ctx.stroke();
+      if (!isCircle) {
+        corners.forEach(c => {
+          ctx.fillStyle = '#4da6ff';
+          ctx.strokeStyle = '#0d0f12';
+          ctx.beginPath();
+          ctx.rect(c.x - HANDLE_R / 2, c.y - HANDLE_R / 2, HANDLE_R, HANDLE_R);
+          ctx.fill(); ctx.stroke();
+        });
+        const rotHandleWorld = geo.rotationHandlePos(prop);
+        const rotHandle = geo.worldToScreen(view, rotHandleWorld.x, rotHandleWorld.y);
+        ctx.strokeStyle = '#4da6ff';
+        ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(rotHandle.x, rotHandle.y); ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(rotHandle.x, rotHandle.y, ROT_HANDLE_R, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#0d0f12'; ctx.stroke();
+      }
       ctx.restore();
 
       if (App.measurement) {
@@ -221,7 +232,10 @@ window.App = window.App || {};
     if (tool === 'add-prop') {
       hint.textContent = 'Click on the canvas to place the prop.';
     } else {
-      hint.textContent = 'Drag to move · click a corner to select it for measuring · top handle rotates · wheel to zoom · middle-drag or space+drag to pan';
+      const selected = App.Store.getSelectedProp();
+      hint.textContent = selected && selected.shape === 'circle'
+        ? 'Drag to move · wheel to zoom · middle-drag or space+drag to pan'
+        : 'Drag to move · click a corner to select it for measuring · top handle rotates · wheel to zoom · middle-drag or space+drag to pan';
     }
   }
 
@@ -233,6 +247,9 @@ window.App = window.App || {};
   }
 
   function hitTestHandles(view, prop, screenPt, pointerType) {
+    // Circular props have no corners and rotation is meaningless (a circle
+    // is rotationally symmetric), so there are no handles to hit-test.
+    if (prop.shape === 'circle') return null;
     // Fingertips are much less precise than a mouse cursor, so touch/pen
     // contacts get a wider hit-test tolerance around each handle.
     const pad = pointerType === 'touch' || pointerType === 'pen' ? 16 : 3;

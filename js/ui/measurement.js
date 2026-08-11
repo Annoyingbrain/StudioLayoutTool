@@ -1,9 +1,11 @@
-// Measurement panel: for the selected prop, pick which point (center or one of
-// its 4 corners) you're measuring, enter its real-world tape-measure distances
-// to each of the 5 reference points, and solve that point's world position via
-// multilateration. Once 2+ of the prop's points have a solved position, the
-// prop's overall X/Y and rotation are fit from those points (1 point alone can
-// only translate the prop -- its rotation is kept as-is).
+// Measurement panel: for the selected prop, pick which point (center, or for a
+// rectangular prop one of its 4 corners) you're measuring, enter its real-world
+// tape-measure distances to each of the 5 reference points, and solve that
+// point's world position via multilateration. Once 2+ of the prop's points have
+// a solved position, the prop's overall X/Y and rotation are fit from those
+// points (1 point alone can only translate the prop -- its rotation is kept
+// as-is). A circular prop only ever has a center point -- it's rotationally
+// symmetric, so its position always comes from that single point.
 window.App = window.App || {};
 
 (function () {
@@ -22,7 +24,7 @@ window.App = window.App || {};
     const container = dom.qs('#point-selector');
     dom.clear(container);
     const prop = currentProp();
-    App.PROP_POINTS.forEach(({ key, label }) => {
+    App.propPointsFor(prop).forEach(({ key, label }) => {
       const hasData = prop && prop.measuredPoints[key];
       const btn = dom.el('button', {
         class: 'point-btn tool-btn' + (key === selectedPointKey ? ' active' : '') + (hasData ? ' has-data' : ''),
@@ -58,7 +60,7 @@ window.App = window.App || {};
     const prop = currentProp();
     const container = dom.qs('#points-status');
     dom.clear(container);
-    App.PROP_POINTS.forEach(({ key, label }) => {
+    App.propPointsFor(prop).forEach(({ key, label }) => {
       const mp = prop.measuredPoints[key];
       const statusText = mp && mp.solved
         ? `solved (±${mp.solved.rmsError.toFixed(3)}m)`
@@ -81,7 +83,7 @@ window.App = window.App || {};
       container.appendChild(row);
     });
 
-    const solvedCount = App.PROP_POINTS.filter(({ key }) => prop.measuredPoints[key] && prop.measuredPoints[key].solved).length;
+    const solvedCount = App.propPointsFor(prop).filter(({ key }) => prop.measuredPoints[key] && prop.measuredPoints[key].solved).length;
     dom.qs('#btn-solve-object').disabled = solvedCount === 0;
   }
 
@@ -105,6 +107,10 @@ window.App = window.App || {};
     const empty = dom.qs('#measurement-empty'), fields = dom.qs('#measurement-fields');
     if (!prop) { empty.classList.remove('hidden'); fields.classList.add('hidden'); return; }
     empty.classList.add('hidden'); fields.classList.remove('hidden');
+
+    // A circular prop only ever exposes 'center' -- if the previously
+    // selected prop's point (e.g. a corner) doesn't apply here, fall back.
+    if (!App.propPointsFor(prop).some(p => p.key === selectedPointKey)) selectedPointKey = 'center';
 
     renderPointSelector();
     renderDistanceInputs();

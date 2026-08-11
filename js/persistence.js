@@ -18,18 +18,22 @@ function migrateSetup(setup) {
   if (!Array.isArray(setup.referencePoints) || !setup.referencePoints.length) {
     setup.referencePoints = App.factories.defaultReferencePoints();
   }
-  if (Array.isArray(setup.scenes) && setup.scenes.length) return setup;
-  const scene = App.factories.newScene('Position 1');
-  scene.props = setup.props || [];
-  scene.frameGrab = setup.frameGrab || null;
-  scene.view = setup.view || scene.view;
-  scene.createdAt = setup.createdAt || scene.createdAt;
-  scene.updatedAt = setup.updatedAt || scene.updatedAt;
-  delete setup.props;
-  delete setup.frameGrab;
-  delete setup.view;
-  setup.scenes = [scene];
-  setup.activeSceneId = scene.id;
+  if (!(Array.isArray(setup.scenes) && setup.scenes.length)) {
+    const scene = App.factories.newScene('Position 1');
+    scene.props = setup.props || [];
+    scene.frameGrab = setup.frameGrab || null;
+    scene.view = setup.view || scene.view;
+    scene.createdAt = setup.createdAt || scene.createdAt;
+    scene.updatedAt = setup.updatedAt || scene.updatedAt;
+    delete setup.props;
+    delete setup.frameGrab;
+    delete setup.view;
+    setup.scenes = [scene];
+    setup.activeSceneId = scene.id;
+  }
+  // Props saved before the circular-shape option existed have no `shape`
+  // field -- default them to 'rect' so every prop has one explicitly.
+  setup.scenes.forEach(scene => (scene.props || []).forEach(p => { if (!p.shape) p.shape = 'rect'; }));
   return setup;
 }
 

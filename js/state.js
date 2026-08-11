@@ -13,6 +13,13 @@ App.PROP_POINTS = [
   { key: 'corner3', label: 'Corner 4' }
 ];
 
+// Which of App.PROP_POINTS are measurable on a given prop. A circular prop
+// has no corners (it's rotationally symmetric), so it can only ever be
+// measured/positioned from its center point.
+App.propPointsFor = function (prop) {
+  return prop.shape === 'circle' ? App.PROP_POINTS.filter(p => p.key === 'center') : App.PROP_POINTS;
+};
+
 App.factories = {
   defaultReferencePoints() {
     // Pre-seeded along the back curved LED wall from the studio's baked mesh sketch
@@ -37,6 +44,7 @@ App.factories = {
     return {
       id: App.makeId('prop'),
       name: 'Prop',
+      shape: 'rect', // 'rect' | 'circle' -- for 'circle', depthM is kept equal to widthM (the diameter)
       widthM: 1,
       depthM: 0.6,
       heightM: 1,
@@ -184,7 +192,7 @@ App.Store = (function () {
       const p = currentScene().props.find(p => p.id === propId);
       if (!p) return null;
       const correspondences = [];
-      App.PROP_POINTS.forEach(({ key }) => {
+      App.propPointsFor(p).forEach(({ key }) => {
         const mp = p.measuredPoints[key];
         if (mp && mp.solved) {
           correspondences.push({ local: App.geometry.pointLocalOffset(p, key), world: { x: mp.solved.x, y: mp.solved.y } });

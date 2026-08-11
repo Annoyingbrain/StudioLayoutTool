@@ -77,11 +77,33 @@ App.geometry = {
     return this.propCorners(prop)[idx];
   },
 
-  // Is world point (px,py) inside prop's rotated rectangle?
+  // Radius of a circular prop (widthM doubles as its diameter).
+  propRadius(prop) {
+    return prop.widthM / 2;
+  },
+
+  // Is world point (px,py) inside the prop's shape (rotated rectangle, or circle)?
   pointInProp(px, py, prop) {
+    if (prop.shape === 'circle') {
+      return this.distance(px, py, prop.x, prop.y) <= this.propRadius(prop);
+    }
     const inv = this.rotatePoint(px, py, prop.x, prop.y, -prop.rotationDeg);
     const dx = inv.x - prop.x, dy = inv.y - prop.y;
     return Math.abs(dx) <= prop.widthM / 2 && Math.abs(dy) <= prop.depthM / 2;
+  },
+
+  // A handful of world-space points on the prop's outline, sufficient for
+  // computing a bounding box -- corners for a rectangle, the 4 axis extremes
+  // for a circle (which has no corners).
+  propExtentPoints(prop) {
+    if (prop.shape === 'circle') {
+      const r = this.propRadius(prop);
+      return [
+        { x: prop.x - r, y: prop.y }, { x: prop.x + r, y: prop.y },
+        { x: prop.x, y: prop.y - r }, { x: prop.x, y: prop.y + r }
+      ];
+    }
+    return this.propCorners(prop);
   },
 
   distance(x1, y1, x2, y2) {
