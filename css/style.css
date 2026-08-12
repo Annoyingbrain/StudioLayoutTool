@@ -176,7 +176,24 @@ label input[type="color"] { padding: 2px; height: 30px; }
 .point-btn.has-data::after { content: ' \25CF'; font-size: 8px; color: #6fd08c; }
 
 #measurement-inputs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.measure-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; font-size: 12px; }
+.measure-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; font-size: 12px; }
+.disto-read-btn { padding: 4px 8px; font-size: 14px; line-height: 1; }
+
+/* ---------------- DISTO "waiting for reading" modal ---------------- */
+#disto-wait-modal.hidden { display: none; }
+#disto-wait-modal {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6);
+}
+#disto-wait-modal .disto-modal-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 28px 32px; text-align: center; min-width: 220px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+}
+#disto-wait-modal .disto-modal-icon { font-size: 32px; animation: disto-pulse 1.1s ease-in-out infinite; }
+#disto-wait-modal .disto-modal-text { margin: 10px 0 16px; font-size: 14px; }
+@keyframes disto-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 #measurement-result { margin: 8px 0; line-height: 1.5; }
 #measurement-result .err-ok { color: #6fd08c; }
 #measurement-result .err-warn { color: #e0b95a; }

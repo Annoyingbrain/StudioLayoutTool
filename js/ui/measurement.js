@@ -1,16 +1,30 @@
 // Measurement panel: for the selected prop, pick which point (center, or for a
 // rectangular prop one of its 4 corners) you're measuring, enter its real-world
-// tape-measure distances to each of the 5 reference points, and solve that
-// point's world position via multilateration. Once 2+ of the prop's points have
-// a solved position, the prop's overall X/Y and rotation are fit from those
-// points (1 point alone can only translate the prop -- its rotation is kept
-// as-is). A circular prop only ever has a center point -- it's rotationally
-// symmetric, so its position always comes from that single point.
+// distances to each of the 5 reference points, and solve that point's world
+// position via multilateration. Once 2+ of the prop's points have a solved
+// position, the prop's overall X/Y and rotation are fit from those points (1
+// point alone can only translate the prop -- its rotation is kept as-is). A
+// circular prop only ever has a center point -- it's rotationally symmetric,
+// so its position always comes from that single point.
+// Distances can be typed in by hand, or streamed live from a Leica DISTO
+// laser meter over Web Bluetooth (see js/disto.js): either click a field and
+// take the reading (fills in, advances to the next field -- fast for desktop
+// sequential entry), or tap that field's 📡 button to open a "waiting for
+// reading" modal targeting just that field (more reliable on touch/mobile,
+// where keyboard focus doesn't survive picking up a separate physical
+// device). Web Bluetooth doesn't exist on iOS at all (WebKit doesn't
+// implement it), so none of this works in Safari or any iPad/iPhone browser.
 window.App = window.App || {};
 
 (function () {
   const dom = App.dom;
   let selectedPointKey = 'center';
+  let lastFocusedInput = null;
+  // Set while the "waiting for reading" modal is open (tap-to-read flow,
+  // primarily for touch/mobile where tracking focus across switching to a
+  // physical device is unreliable) -- the next DISTO reading fills this
+  // specific input instead of whatever has keyboard focus.
+  let pendingReadTarget = null;
 
   function currentProp() { return App.Store.getSelectedProp(); }
 
@@ -47,8 +61,12 @@ window.App = window.App || {};
       setup.referencePoints.forEach((rp, i) => {
         const input = dom.el('input', { type: 'number', step: '0.001', min: '0', placeholder: 'meters' });
         input.value = stored && stored.distances[i] != null ? stored.distances[i] : '';
+        const readBtn = dom.el('button', {
+          class: 'disto-read-btn', text: '📡', title: `Read distance to ${rp.label} from DISTO`,
+          onclick: (e) => { e.preventDefault(); requestReadingFor(input, rp.label); }
+        });
         container.appendChild(dom.el('div', { class: 'measure-row' }, [
-          dom.el('span', { text: `Dist. to ${rp.label}` }), input
+          dom.el('span', { text: `Dist. to ${rp.label}` }), input, readBtn
         ]));
       });
       container.setAttribute('data-tag', tag);
@@ -147,6 +165,87 @@ window.App = window.App || {};
     });
   }
 
+  // Fills whichever distance input was last focused (falling back to the
+  // first empty one) with a live DISTO reading, then advances focus to the
+  // next field so a sequence of readings can be tapped in without touching
+  // the mouse/keyboard between shots. If the tap-to-read modal is open for a
+  // specific field, that field takes priority over focus tracking.
+  function handleDistoReading(meters) {
+    if (pendingReadTarget) {
+      pendingReadTarget.value = meters.toFixed(3);
+      pendingReadTarget.dispatchEvent(new Event('input', { bubbles: true }));
+      hideDistoWaitModal();
+      return;
+    }
+
+    const inputs = dom.qsa('#measurement-inputs input');
+    if (!inputs.length) return;
+    const focusedIdx = lastFocusedInput ? inputs.indexOf(lastFocusedInput) : -1;
+    const target = focusedIdx !== -1 ? inputs[focusedIdx] : (inputs.find(i => i.value === '') || inputs[0]);
+    target.value = meters.toFixed(3);
+
+    const next = inputs[inputs.indexOf(target) + 1];
+    if (next) { next.focus(); lastFocusedInput = next; }
+  }
+
+  function showDistoWaitModal(label) {
+    dom.qs('#disto-modal-text').textContent = `Waiting for reading to ${label}… take it on the DISTO now.`;
+    dom.qs('#disto-wait-modal').classList.remove('hidden');
+  }
+
+  function hideDistoWaitModal() {
+    pendingReadTarget = null;
+    dom.qs('#disto-wait-modal').classList.add('hidden');
+  }
+
+  // Tap-to-read: connects the DISTO first if needed (must happen directly
+  // inside this click handler -- Web Bluetooth requires a real user gesture,
+  // so it can't be deferred behind an intermediate await/prompt), then opens
+  // a modal that captures the very next reading into this specific field.
+  // Meant mainly for touch/tablet use, where relying on which field still has
+  // keyboard focus while the user picks up a separate physical device is
+  // unreliable.
+  async function requestReadingFor(input, label) {
+    if (!App.disto.isSupported()) {
+      App.toast('Web Bluetooth isn\'t available in this browser -- use Chrome or Edge, over HTTPS or localhost.', true);
+      return;
+    }
+    if (!App.disto.isConnected()) {
+      try {
+        await App.disto.connect();
+      } catch (err) {
+        if (err.name !== 'NotFoundError') App.toast('DISTO connection failed: ' + err.message, true);
+        return;
+      }
+    }
+    pendingReadTarget = input;
+    showDistoWaitModal(label);
+  }
+
+  function updateDistoStatus({ connected, deviceName }) {
+    dom.qs('#btn-disto-connect').textContent = connected ? 'Disconnect DISTO' : 'Connect DISTO';
+    const status = dom.qs('#disto-status');
+    status.textContent = connected ? `Connected: ${deviceName || 'DISTO'}` : 'Not connected';
+    status.classList.toggle('err-ok', connected);
+  }
+
+  async function toggleDisto(opts) {
+    if (!App.disto.isSupported()) {
+      App.toast('Web Bluetooth isn\'t available in this browser -- use Chrome or Edge, over HTTPS or localhost.', true);
+      return;
+    }
+    try {
+      if (App.disto.isConnected()) {
+        App.disto.disconnect();
+      } else {
+        await App.disto.connect(opts);
+        App.toast('DISTO connected.');
+      }
+    } catch (err) {
+      if (err.name !== 'NotFoundError') App.toast('DISTO connection failed: ' + err.message, true);
+    }
+  }
+
   function solveObject() {
     const prop = currentProp();
     if (!prop) return;
@@ -161,6 +260,16 @@ window.App = window.App || {};
     init() {
       dom.qs('#btn-compute-position').addEventListener('click', compute);
       dom.qs('#btn-solve-object').addEventListener('click', solveObject);
+
+      dom.qs('#btn-disto-connect').addEventListener('click', () => toggleDisto());
+      dom.qs('#btn-disto-connect-broad').addEventListener('click', () => toggleDisto({ broad: true }));
+      dom.qs('#disto-modal-cancel').addEventListener('click', hideDistoWaitModal);
+      dom.qs('#measurement-inputs').addEventListener('focusin', e => {
+        if (e.target.tagName === 'INPUT') lastFocusedInput = e.target;
+      });
+      App.disto.onReading(handleDistoReading);
+      App.disto.onStatusChange(updateDistoStatus);
+
       App.Store.subscribe(render);
       render();
     },

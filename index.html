@@ -150,6 +150,12 @@
         <h3>Measure Selected Prop</h3>
         <div id="measurement-empty" class="muted small">Select a prop to enter measured distances.</div>
         <div id="measurement-fields" class="hidden">
+          <div id="disto-panel" class="tool-row">
+            <button id="btn-disto-connect">Connect DISTO</button>
+            <button id="btn-disto-connect-broad" class="small">Not listed? Try broad scan</button>
+            <span id="disto-status" class="small muted">Not connected</span>
+          </div>
+          <p class="hint">Click a distance field below, then take the reading on the DISTO -- it fills that field and moves to the next one. Open the browser console (F12) for connection details if pairing doesn't work.</p>
           <div id="point-selector" class="tool-row"></div>
           <div id="measurement-inputs"></div>
           <button id="btn-compute-position">Compute This Point</button>
@@ -175,6 +181,7 @@
 <script src="js/utils/geometry.js"></script>
 <script src="js/multilateration.js"></script>
 <script src="js/rigidFit.js"></script>
+<script src="js/disto.js"></script>
 <script src="js/studioSketch.js"></script>
 <script src="js/state.js"></script>
 <script src="js/persistence.js"></script>
@@ -183,6 +190,14 @@
 <script src="js/floorPngExport.js"></script>
 <script src="js/reportExport.js"></script>
 <script src="js/ui/sidebar.js"></script>
+<div id="disto-wait-modal" class="hidden">
+  <div class="disto-modal-box">
+    <div class="disto-modal-icon">📡</div>
+    <div id="disto-modal-text" class="disto-modal-text">Waiting for reading…</div>
+    <button id="disto-modal-cancel">Cancel</button>
+  </div>
+</div>
+
 <script src="js/ui/refpoints.js"></script>
 <script src="js/ui/measurement.js"></script>
 <script src="js/ui/githubSync.js"></script>
