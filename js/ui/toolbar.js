@@ -147,6 +147,7 @@ window.App = window.App || {};
       });
 
       dom.qs('#btn-export-csv').addEventListener('click', () => App.csvExport.exportSetup(App.Store.getSetup(), App.Store.getScene()));
+      dom.qs('#btn-export-floor-png').addEventListener('click', () => App.floorPngExport.exportSetup(App.Store.getSetup(), App.Store.getScene()));
       dom.qs('#btn-report').addEventListener('click', () => App.reportExport.open(App.Store.getSetup(), App.Store.getScene()));
 
       dom.qsa('.tool-btn').forEach(btn => {
