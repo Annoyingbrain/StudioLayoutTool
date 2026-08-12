@@ -1,5 +1,5 @@
-// The 2D top-down studio canvas: grid, reference points, props (rectangles or
-// circles) with drag-move, drag-rotate and drag-resize.
+// The 2D top-down studio canvas: grid, reference points, props (rectangles,
+// triangles, or circles) with drag-move, drag-rotate and drag-resize.
 window.App = window.App || {};
 
 (function () {

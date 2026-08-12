@@ -49,9 +49,17 @@ App.geometry = {
     };
   },
 
-  // Local (unrotated, center-relative) offsets of a prop's 4 corners, in corner0..corner3 order.
+  // Local (unrotated, center-relative) offsets of a prop's corners, in corner0..cornerN order.
+  // Rectangles get 4 (corner0..corner3); triangles get 3 (corner0..corner2), an isosceles
+  // triangle inscribed in the widthM x depthM box with its apex on the same side as the
+  // rotation handle (so the shape visibly "points" the way it'll spin).
   localCornerOffsets(prop) {
     const hw = prop.widthM / 2, hd = prop.depthM / 2;
+    if (prop.shape === 'triangle') {
+      return [
+        { x: 0, y: hd }, { x: -hw, y: -hd }, { x: hw, y: -hd }
+      ];
+    }
     return [
       { x: -hw, y: -hd }, { x: hw, y: -hd }, { x: hw, y: hd }, { x: -hw, y: hd }
     ];
@@ -82,19 +90,32 @@ App.geometry = {
     return prop.widthM / 2;
   },
 
-  // Is world point (px,py) inside the prop's shape (rotated rectangle, or circle)?
+  // Is world point (px,py) inside the prop's shape (rotated rectangle, triangle, or circle)?
   pointInProp(px, py, prop) {
     if (prop.shape === 'circle') {
       return this.distance(px, py, prop.x, prop.y) <= this.propRadius(prop);
     }
     const inv = this.rotatePoint(px, py, prop.x, prop.y, -prop.rotationDeg);
+    if (prop.shape === 'triangle') {
+      const [a, b, c] = this.localCornerOffsets(prop).map(o => ({ x: prop.x + o.x, y: prop.y + o.y }));
+      return this.pointInTriangle(inv, a, b, c);
+    }
     const dx = inv.x - prop.x, dy = inv.y - prop.y;
     return Math.abs(dx) <= prop.widthM / 2 && Math.abs(dy) <= prop.depthM / 2;
   },
 
+  // Sign-of-cross-product test: true if p is inside (or on the edge of) triangle abc.
+  pointInTriangle(p, a, b, c) {
+    const sign = (p1, p2, p3) => (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+    const d1 = sign(p, a, b), d2 = sign(p, b, c), d3 = sign(p, c, a);
+    const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
+    const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
+    return !(hasNeg && hasPos);
+  },
+
   // A handful of world-space points on the prop's outline, sufficient for
-  // computing a bounding box -- corners for a rectangle, the 4 axis extremes
-  // for a circle (which has no corners).
+  // computing a bounding box -- corners for a rectangle/triangle, the 4 axis
+  // extremes for a circle (which has no corners).
   propExtentPoints(prop) {
     if (prop.shape === 'circle') {
       const r = this.propRadius(prop);

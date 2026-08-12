@@ -15,9 +15,13 @@ App.PROP_POINTS = [
 
 // Which of App.PROP_POINTS are measurable on a given prop. A circular prop
 // has no corners (it's rotationally symmetric), so it can only ever be
-// measured/positioned from its center point.
+// measured/positioned from its center point. A triangular prop has only 3
+// corners (corner0..corner2 -- see geometry.localCornerOffsets), so corner3
+// doesn't apply.
 App.propPointsFor = function (prop) {
-  return prop.shape === 'circle' ? App.PROP_POINTS.filter(p => p.key === 'center') : App.PROP_POINTS;
+  if (prop.shape === 'circle') return App.PROP_POINTS.filter(p => p.key === 'center');
+  if (prop.shape === 'triangle') return App.PROP_POINTS.filter(p => p.key !== 'corner3');
+  return App.PROP_POINTS;
 };
 
 App.factories = {
@@ -44,7 +48,7 @@ App.factories = {
     return {
       id: App.makeId('prop'),
       name: 'Prop',
-      shape: 'rect', // 'rect' | 'circle' -- for 'circle', depthM is kept equal to widthM (the diameter)
+      shape: 'rect', // 'rect' | 'circle' | 'triangle' -- for 'circle', depthM is kept equal to widthM (the diameter)
       widthM: 1,
       depthM: 0.6,
       heightM: 1,
