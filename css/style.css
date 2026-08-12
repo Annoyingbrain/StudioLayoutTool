@@ -176,8 +176,12 @@ label input[type="color"] { padding: 2px; height: 30px; }
 .point-btn.has-data::after { content: ' \25CF'; font-size: 8px; color: #6fd08c; }
 
 #measurement-inputs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.measure-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; align-items: center; font-size: 12px; }
-.disto-read-btn { padding: 4px 8px; font-size: 14px; line-height: 1; }
+.measure-row { display: grid; grid-template-columns: 1fr 8ch auto; gap: 6px; align-items: center; font-size: 12px; }
+.measure-row input { width: 100%; min-width: 0; text-align: right; padding-left: 4px; padding-right: 4px; }
+.measure-row input[type=number] { -moz-appearance: textfield; }
+.measure-row input[type=number]::-webkit-outer-spin-button,
+.measure-row input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.disto-read-btn { padding: 6px 20px; font-size: 18px; line-height: 1; min-width: 56px; }
 
 /* ---------------- DISTO "waiting for reading" modal ---------------- */
 #disto-wait-modal.hidden { display: none; }

@@ -62,7 +62,7 @@ window.App = window.App || {};
         const input = dom.el('input', { type: 'number', step: '0.001', min: '0', placeholder: 'meters' });
         input.value = stored && stored.distances[i] != null ? stored.distances[i] : '';
         const readBtn = dom.el('button', {
-          class: 'disto-read-btn', text: '📡', title: `Read distance to ${rp.label} from DISTO`,
+          class: 'disto-read-btn', text: '📏', title: `Read distance to ${rp.label} from DISTO`,
           onclick: (e) => { e.preventDefault(); requestReadingFor(input, rp.label); }
         });
         container.appendChild(dom.el('div', { class: 'measure-row' }, [
