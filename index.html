@@ -156,6 +156,11 @@
             <span id="disto-status" class="small muted">Not connected</span>
           </div>
           <p class="hint">Click a distance field below, then take the reading on the DISTO -- it fills that field and moves to the next one. Open the browser console (F12) for connection details if pairing doesn't work.</p>
+          <div class="tool-row">
+            <span>Tape height above object (m)</span>
+            <input type="number" id="tape-above-object-input" step="0.01" min="0" style="width: 5em;">
+          </div>
+          <p class="hint">How far above each prop's own top the tape/DISTO is actually read (e.g. a monopod-mounted DISTO's fixed height above the prop) -- used to correct raw slant readings to horizontal distance.</p>
           <div id="point-selector" class="tool-row"></div>
           <div id="measurement-inputs"></div>
           <button id="btn-compute-position">Compute This Point</button>
@@ -166,7 +171,7 @@
 
           <div class="subheading">Current Distances</div>
           <div id="current-distances"></div>
-          <p class="hint">Straight-line distance from the selected point's current on-canvas position to each reference point — for cross-checking against a tape measure, even for points you haven't individually measured.</p>
+          <p class="hint">Expected tape/DISTO reading from the selected point's current on-canvas position to each reference point (accounts for reference point wall height and tape height above the object) — for cross-checking against a real measurement, even for points you haven't individually measured.</p>
         </div>
       </section>
 
@@ -181,6 +186,7 @@
 <script src="js/utils/geometry.js"></script>
 <script src="js/multilateration.js"></script>
 <script src="js/rigidFit.js"></script>
+<script src="js/heightCorrection.js"></script>
 <script src="js/disto.js"></script>
 <script src="js/studioSketch.js"></script>
 <script src="js/state.js"></script>

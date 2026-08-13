@@ -111,8 +111,83 @@ App.floorPngExport = (function () {
     return canvas;
   }
 
+  // Calibration aid: marks one or more points given directly in
+  // Disguise-space coordinates (not app-internal world coordinates -- no
+  // toDisguise() call, unlike drawProp) with a crosshair + coordinates
+  // printed next to each, on the same black canvas/scale/orientation as the
+  // real floor export. Lets the user play this in Disguise and physically
+  // measure between the marked points to check the app's coordinate math
+  // against real space -- see [[project-disguise-coordinate-origin]] /
+  // [[project-measurement-height-correction]].
+  function buildTestPointsCanvas(points) {
+    const canvas = document.createElement('canvas');
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    const bounds = floorBoundsDisguise();
+    const scaleX = CANVAS_W / (bounds.maxX - bounds.minX);
+    const scaleY = CANVAS_H / (bounds.maxY - bounds.minY);
+    const toPx = d => ({
+      x: (d.x - bounds.minX) * scaleX,
+      y: CANVAS_H - (d.y - bounds.minY) * scaleY
+    });
+
+    const pxPoints = points.map(p => ({ ...p, px: toPx(p) }));
+
+    // Connect the dots so it's visually obvious which pair to measure
+    // between, in the order given.
+    if (pxPoints.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = '#ffcc00';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([14, 10]);
+      ctx.beginPath();
+      pxPoints.forEach((p, i) => i === 0 ? ctx.moveTo(p.px.x, p.px.y) : ctx.lineTo(p.px.x, p.px.y));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    pxPoints.forEach(p => {
+      const { x: cx, y: cy } = p.px;
+      ctx.save();
+      ctx.strokeStyle = '#ff0000';
+      ctx.fillStyle = '#ff0000';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(cx, cy, 24, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx - 45, cy); ctx.lineTo(cx + 45, cy);
+      ctx.moveTo(cx, cy - 45); ctx.lineTo(cx, cy + 45);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 34px Segoe UI, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(p.label || `x=${p.x}m, y=${p.y}m`, cx, cy + 55);
+      ctx.restore();
+    });
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 46px Segoe UI, Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Disguise coordinate test points', CANVAS_W / 2, 40);
+    ctx.restore();
+
+    return canvas;
+  }
+
   return {
     buildCanvas,
+    buildTestPointsCanvas,
 
     exportSetup(setup, scene) {
       if (!scene.props.length) { App.toast('No props to export yet.', true); return; }
@@ -121,6 +196,16 @@ App.floorPngExport = (function () {
         if (!blob) { App.toast('Could not generate PNG.', true); return; }
         const safeName = `${setup.name || 'setup'}_Position_${scene.name || '1'}_floor`.replace(/[^a-z0-9_\-]+/gi, '_');
         App.dom.downloadBlob(`${safeName}.png`, blob);
+      }, 'image/png');
+    },
+
+    // points: [{x, y, label}, ...] in Disguise-space meters.
+    exportTestPoints(points) {
+      const canvas = buildTestPointsCanvas(points);
+      canvas.toBlob(blob => {
+        if (!blob) { App.toast('Could not generate PNG.', true); return; }
+        const safeName = 'disguise_test_points_' + points.map(p => `${p.x}_${p.y}`).join('-');
+        App.dom.downloadBlob(`${safeName.replace(/[^a-z0-9_\-.]+/gi, '_')}.png`, blob);
       }, 'image/png');
     }
   };

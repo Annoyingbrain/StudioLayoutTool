@@ -6,6 +6,7 @@ window.App = window.App || {};
 const LS_INDEX_KEY = 'vps_setups_index';
 const LS_SETUP_PREFIX = 'vps_setup_';
 const LS_DEFAULT_REFS_KEY = 'vps_default_refpoints';
+const LS_TAPE_ABOVE_OBJECT_KEY = 'vps_tape_above_object_m';
 
 // Older saved/exported setups (before multi-scene support) kept props,
 // frameGrab and view directly on the setup instead of inside a scenes array.
@@ -83,6 +84,19 @@ App.persistence = {
     } catch (e) {
       return null;
     }
+  },
+
+  // Tape/DISTO height above the object's top (js/heightCorrection.js) --
+  // a rig setting (monopod height) rather than per-setup data, so it's kept
+  // separately and carries over between setups until changed.
+  saveTapeAboveObjectM(v) {
+    localStorage.setItem(LS_TAPE_ABOVE_OBJECT_KEY, String(v));
+  },
+
+  loadTapeAboveObjectM() {
+    const raw = localStorage.getItem(LS_TAPE_ABOVE_OBJECT_KEY);
+    const v = raw == null ? null : parseFloat(raw);
+    return v != null && !isNaN(v) ? v : null;
   },
 
   exportToFile(setup) {

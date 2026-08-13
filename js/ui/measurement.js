@@ -14,6 +14,17 @@
 // where keyboard focus doesn't survive picking up a separate physical
 // device). Web Bluetooth doesn't exist on iOS at all (WebKit doesn't
 // implement it), so none of this works in Safari or any iPad/iPhone browser.
+//
+// Raw readings are 3D slant distances, not flat 2D ones -- reference points
+// sit on the wall at a fixed height and the tape is read near the prop's own
+// height, not the floor -- so they're corrected to horizontal distances
+// before solving (see js/heightCorrection.js). The "Tape height above
+// object" field sets how far above the prop that reading is actually taken
+// (a monopod-mounted DISTO holds this at a known fixed height); it's
+// persisted across sessions via App.persistence, independent of the setup
+// data. The "Current Distances" cross-check readout does the reverse
+// (horizontal -> expected slant) so it matches what a real tape/DISTO
+// reading should show.
 window.App = window.App || {};
 
 (function () {
@@ -112,10 +123,11 @@ window.App = window.App || {};
     dom.clear(container);
     const worldPt = App.geometry.pointWorldPosition(prop, selectedPointKey);
     setup.referencePoints.forEach(rp => {
-      const d = App.geometry.distance(worldPt.x, worldPt.y, rp.x, rp.y);
+      const horizontal = App.geometry.distance(worldPt.x, worldPt.y, rp.x, rp.y);
+      const slant = App.heightCorrection.toSlant(horizontal, prop);
       container.appendChild(dom.el('div', { class: 'dist-row' }, [
         dom.el('span', { class: 'dr-label', text: rp.label }),
-        dom.el('span', { class: 'dr-value', text: `${d.toFixed(3)} m` })
+        dom.el('span', { class: 'dr-value', text: `${slant.toFixed(3)} m` })
       ]));
     });
   }
@@ -144,13 +156,20 @@ window.App = window.App || {};
     const prop = currentProp();
     if (!prop) return;
     const setup = App.Store.getSetup();
-    const distances = readDistances();
+    // Raw tape/DISTO readings are 3D slant distances (reference points are on
+    // the wall at a fixed height; the tape is read near the prop's own
+    // height, not the floor) -- correct each to the horizontal distance the
+    // (floor-plane) multilateration solve actually needs before solving. The
+    // raw readings are still what gets persisted, so this recomputes cleanly
+    // if the height assumptions ever change.
+    const rawDistances = readDistances();
+    const distances = rawDistances.map(d => App.heightCorrection.toHorizontal(d, prop));
     const result = App.multilateration.solve(setup.referencePoints, distances);
     const resultEl = dom.qs('#measurement-result');
 
     if (!result.ok) {
       resultEl.innerHTML = `<span class="err-bad">${result.reason}</span>`;
-      App.Store.updateMeasuredPoint(prop.id, selectedPointKey, { distances, solved: null });
+      App.Store.updateMeasuredPoint(prop.id, selectedPointKey, { distances: rawDistances, solved: null });
       return;
     }
 
@@ -160,7 +179,7 @@ window.App = window.App || {};
       `<span class="${errClass}">Residual error: ${result.rmsError.toFixed(3)} m (from ${result.usedPoints} points)</span>`;
 
     App.Store.updateMeasuredPoint(prop.id, selectedPointKey, {
-      distances,
+      distances: rawDistances,
       solved: { x: result.x, y: result.y, rmsError: result.rmsError }
     });
   }
@@ -246,6 +265,20 @@ window.App = window.App || {};
     }
   }
 
+  function initTapeAboveObjectInput() {
+    const input = dom.qs('#tape-above-object-input');
+    const stored = App.persistence.loadTapeAboveObjectM();
+    if (stored != null) App.heightCorrection.tapeAboveObjectM = stored;
+    input.value = App.heightCorrection.tapeAboveObjectM;
+    input.addEventListener('input', () => {
+      const v = parseFloat(input.value);
+      if (isNaN(v)) return;
+      App.heightCorrection.tapeAboveObjectM = v;
+      App.persistence.saveTapeAboveObjectM(v);
+      if (currentProp()) renderCurrentDistances();
+    });
+  }
+
   function solveObject() {
     const prop = currentProp();
     if (!prop) return;
@@ -269,6 +302,7 @@ window.App = window.App || {};
       });
       App.disto.onReading(handleDistoReading);
       App.disto.onStatusChange(updateDistoStatus);
+      initTapeAboveObjectInput();
 
       App.Store.subscribe(render);
       render();
